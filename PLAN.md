@@ -547,7 +547,7 @@ Abnahme durch Tests: gleiche Größe mit verschiedenem Inhalt ist keine Dublette
 ## 12. Stand
 
 - [x] Etappe 0 – Projektgerüst
-- [ ] Etappe 1 – Suchkern
+- [x] Etappe 1 – Suchkern
 - [ ] Etappe 2 – Datenbank und Speicher
 - [ ] Etappe 3 – Durchlauf
 - [ ] Etappe 4 – Suchleiste
