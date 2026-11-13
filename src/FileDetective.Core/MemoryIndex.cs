@@ -177,6 +177,21 @@ public sealed partial class MemoryIndex : IDisposable
         }
     }
 
+    /// <summary>Changes the last write time of an entry (stage 2 addition, used when a scan finds a changed file).</summary>
+    /// <returns>False if the entry does not exist or is deleted.</returns>
+    public bool UpdateMTime(int id, long lastWriteUnixSeconds)
+    {
+        _lock.EnterWriteLock();
+        try
+        {
+            return UpdateMTimeCore(id, lastWriteUnixSeconds);
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+    }
+
     /// <summary>
     /// Takes the write lock for a batch of changes; dispose the scope to release it.
     /// Must be disposed on the same thread (ReaderWriterLockSlim has thread affinity).
@@ -221,6 +236,9 @@ public sealed partial class MemoryIndex : IDisposable
 
         /// <inheritdoc cref="MemoryIndex.Delete"/>
         public readonly bool Delete(int id) => Index.DeleteCore(id);
+
+        /// <inheritdoc cref="MemoryIndex.UpdateMTime"/>
+        public readonly bool UpdateMTime(int id, long lastWriteUnixSeconds) => Index.UpdateMTimeCore(id, lastWriteUnixSeconds);
 
         public void Dispose()
         {
@@ -309,6 +327,17 @@ public sealed partial class MemoryIndex : IDisposable
         slot.Flags = newParentId == 0
             ? (byte)(slot.Flags | EntryFlags.RootEntry)
             : (byte)(slot.Flags & ~EntryFlags.RootEntry);
+        return true;
+    }
+
+    private bool UpdateMTimeCore(int id, long lastWriteUnixSeconds)
+    {
+        if (!TryGetLiveSlot(id, out var block))
+        {
+            return false;
+        }
+
+        block[id & BlockMask].MTime = (uint)Math.Clamp(lastWriteUnixSeconds, 0, uint.MaxValue);
         return true;
     }
 
