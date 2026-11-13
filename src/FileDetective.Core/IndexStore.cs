@@ -307,6 +307,26 @@ public sealed class IndexStore : IDisposable
         }
     }
 
+    /// <summary>One entry from the database or null (stage 3 addition for subtree scans).</summary>
+    public StoredEntry? GetEntry(int id)
+    {
+        lock (_readLock)
+        {
+            using var cmd = Command(
+                _readConnection, null, "SELECT id, parent_id, root_id, name, is_dir, size, mtime, attrs FROM entries WHERE id = @id");
+            cmd.Parameters.AddWithValue("@id", id);
+            using var r = cmd.ExecuteReader();
+            if (!r.Read())
+            {
+                return null;
+            }
+
+            return new StoredEntry(
+                r.GetInt32(0), r.GetInt32(1), (byte)r.GetInt32(2), r.GetString(3), r.GetInt32(4) != 0,
+                r.GetInt64(5), r.GetInt64(6), (FileAttributes)r.GetInt32(7));
+        }
+    }
+
     /// <summary>
     /// Finds the entry for a full path by walking down from the location whose path is the longest prefix.
     /// Names are compared case-insensitively. Returns null if the path is not in the directory.

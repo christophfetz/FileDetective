@@ -36,7 +36,11 @@ public sealed record RootInfo(
 public readonly record struct KnownChild(
     int Id, string Name, bool IsDirectory, long Size, long MTimeUnixSeconds, FileAttributes Attributes);
 
-/// <summary>A new entry. <see cref="Id"/> comes from <see cref="IndexStore.AllocateId"/>.</summary>
+/// <summary>One stored entry (stage 3 addition, used to start a subtree scan at a known folder).</summary>
+public sealed record StoredEntry(
+    int Id, int ParentId, byte RootId, string Name, bool IsDirectory, long Size, long MTimeUnixSeconds, FileAttributes Attributes);
+
+/// <summary>A new entry.<see cref="Id"/> comes from <see cref="IndexStore.AllocateId"/>.</summary>
 public readonly record struct EntryInsert(
     int Id, int ParentId, string Name, bool IsDirectory, long Size, long MTimeUnixSeconds, FileAttributes Attributes);
 
