@@ -1,0 +1,147 @@
+<Window x:Class="FileDetective.App.SearchBarWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:FileDetective.App.ViewModels"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        ResizeMode="NoResize"
+        SizeToContent="Height"
+        Width="752"
+        ShowActivated="True"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display"
+        FontFamily="Segoe UI Variable Text, Segoe UI"
+        FontSize="13">
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="BorderBrushSoft" Color="#E1E4E8" />
+    <SolidColorBrush x:Key="TextBrush" Color="#1F2328" />
+    <SolidColorBrush x:Key="MutedBrush" Color="#6A737D" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#E7F0FD" />
+    <SolidColorBrush x:Key="ChipBrush" Color="#F0F2F5" />
+
+    <Style x:Key="HitItemStyle" TargetType="ListBoxItem">
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="Row" CornerRadius="6" Padding="{TemplateBinding Padding}" Background="Transparent">
+              <ContentPresenter VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Row" Property="Background" Value="#F3F5F7" />
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Row" Property="Background" Value="{StaticResource AccentSoftBrush}" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <DataTemplate DataType="{x:Type vm:HitItem}">
+      <Grid Height="36">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="32" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="300" />
+          <ColumnDefinition Width="84" />
+        </Grid.ColumnDefinitions>
+        <Image Source="{Binding Icon}" Width="20" Height="20" HorizontalAlignment="Left"
+               RenderOptions.BitmapScalingMode="HighQuality" />
+        <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="{StaticResource TextBrush}"
+                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,12,0" />
+        <TextBlock Grid.Column="2" Text="{Binding FolderDisplay}" ToolTip="{Binding FolderPath}"
+                   Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
+        <TextBlock Grid.Column="3" Text="{Binding DateText}" Foreground="{StaticResource MutedBrush}"
+                   FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" />
+      </Grid>
+    </DataTemplate>
+  </Window.Resources>
+
+  <Border Margin="16" CornerRadius="12" Background="{StaticResource SurfaceBrush}"
+          BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="1">
+    <Border.Effect>
+      <DropShadowEffect BlurRadius="18" ShadowDepth="3" Direction="270" Opacity="0.25" Color="#000000" />
+    </Border.Effect>
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <!-- Input row -->
+      <Grid Grid.Row="0" Margin="16,12,16,12">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="18"
+                   Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,12,0" />
+        <Grid Grid.Column="1">
+          <TextBox x:Name="InputBox" Text="{Binding Input, UpdateSourceTrigger=PropertyChanged}"
+                   FontSize="20" BorderThickness="0" Background="Transparent"
+                   Foreground="{StaticResource TextBrush}" VerticalContentAlignment="Center"
+                   CaretBrush="{StaticResource TextBrush}" />
+          <TextBlock Text="{Binding PlaceholderText}" FontSize="20" Foreground="#9AA4AE"
+                     IsHitTestVisible="False" VerticalAlignment="Center" Margin="2,0,0,0">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding Text, ElementName=InputBox}" Value="">
+                    <Setter Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
+        </Grid>
+        <Border Grid.Column="2" CornerRadius="6" Background="{StaticResource ChipBrush}" Padding="8,3"
+                VerticalAlignment="Center" Margin="12,0,0,0">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="{Binding ModeLabel}" Foreground="{StaticResource TextBrush}" FontSize="12" />
+            <TextBlock Text="{Binding TabHint}" Foreground="{StaticResource MutedBrush}" FontSize="11"
+                       Margin="8,0,0,0" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <Border Grid.Row="1" Height="1" Background="{StaticResource BorderBrushSoft}"
+              Visibility="{Binding HasHits, Converter={StaticResource BoolToVisibility}}" />
+
+      <!-- Hit list: virtualized, at most 100 rows, 8 rows visible. -->
+      <ListBox x:Name="HitList" Grid.Row="2" ItemsSource="{Binding Hits}" SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
+               ItemContainerStyle="{StaticResource HitItemStyle}" BorderThickness="0" Background="Transparent"
+               Margin="8,6,8,6" MaxHeight="288" Focusable="False"
+               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.ScrollUnit="Item"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+               Visibility="{Binding HasHits, Converter={StaticResource BoolToVisibility}}">
+        <ListBox.ContextMenu>
+          <ContextMenu x:Name="HitMenu">
+            <MenuItem x:Name="OpenMenuItem" />
+            <MenuItem x:Name="RevealMenuItem" />
+            <MenuItem x:Name="CopyMenuItem" />
+          </ContextMenu>
+        </ListBox.ContextMenu>
+      </ListBox>
+
+      <Border Grid.Row="3" BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="0,1,0,0" Padding="16,8">
+        <TextBlock Text="{Binding FooterText}" Foreground="{StaticResource MutedBrush}" FontSize="12"
+                   TextTrimming="CharacterEllipsis" />
+      </Border>
+    </Grid>
+  </Border>
+</Window>

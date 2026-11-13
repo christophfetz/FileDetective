@@ -6,4 +6,35 @@
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
   <data name="Menu_Exit" xml:space="preserve"><value>Exit</value></data>
   <data name="Tray_Tooltip" xml:space="preserve"><value>FileDetective</value></data>
+  <data name="Menu_Search" xml:space="preserve"><value>Search</value></data>
+  <data name="Tray_StatusLoading" xml:space="preserve"><value>Loading directory…</value></data>
+  <data name="Tray_Status" xml:space="preserve"><value>{0:N0} entries · {1}</value></data>
+  <data name="Tray_Updating" xml:space="preserve"><value>updating</value></data>
+  <data name="Tray_UpdatedToday" xml:space="preserve"><value>updated today {0:t}</value></data>
+  <data name="Tray_UpdatedOn" xml:space="preserve"><value>updated {0:g}</value></data>
+  <data name="Tray_NeverUpdated" xml:space="preserve"><value>not updated yet</value></data>
+  <data name="Hotkey_FailedTitle" xml:space="preserve"><value>Shortcut not available</value></data>
+  <data name="Hotkey_FailedText" xml:space="preserve"><value>Alt+Space could not be registered, probably another program uses it ({0}). Use the tray icon to open the search bar.</value></data>
+  <data name="Error_Title" xml:space="preserve"><value>FileDetective</value></data>
+  <data name="Error_IndexFailed" xml:space="preserve"><value>The directory could not be loaded or updated: {0}</value></data>
+  <data name="Bar_Title" xml:space="preserve"><value>FileDetective search</value></data>
+  <data name="Bar_Placeholder" xml:space="preserve"><value>Search files and folders</value></data>
+  <data name="Bar_TabKey" xml:space="preserve"><value>Tab</value></data>
+  <data name="Mode_All" xml:space="preserve"><value>All</value></data>
+  <data name="Mode_Files" xml:space="preserve"><value>Files</value></data>
+  <data name="Mode_Folders" xml:space="preserve"><value>Folders</value></data>
+  <data name="Footer_Loading" xml:space="preserve"><value>Loading directory…</value></data>
+  <data name="Footer_FirstScan" xml:space="preserve"><value>First scan running: {0:N0} entries</value></data>
+  <data name="Footer_Idle" xml:space="preserve"><value>Type to search · Esc close</value></data>
+  <data name="Footer_None" xml:space="preserve"><value>No hits · Esc close</value></data>
+  <data name="Footer_Hits" xml:space="preserve"><value>{0:N0} hits · Enter open · Ctrl+Enter folder · Esc close</value></data>
+  <data name="Footer_HitsLimited" xml:space="preserve"><value>{0:N0} hits, best {1:N0} shown · Enter open · Ctrl+Enter folder · Esc close</value></data>
+  <data name="Footer_Vanished" xml:space="preserve"><value>The item no longer exists and was removed from the directory.</value></data>
+  <data name="Footer_Unreachable" xml:space="preserve"><value>The item cannot be reached right now (location not available?).</value></data>
+  <data name="Footer_OpenFailed" xml:space="preserve"><value>Could not open: {0}</value></data>
+  <data name="Footer_Copied" xml:space="preserve"><value>Path copied to the clipboard.</value></data>
+  <data name="Footer_CopyFailed" xml:space="preserve"><value>The clipboard is busy, the path was not copied.</value></data>
+  <data name="Ctx_Open" xml:space="preserve"><value>Open</value></data>
+  <data name="Ctx_Reveal" xml:space="preserve"><value>Show in Explorer</value></data>
+  <data name="Ctx_CopyPath" xml:space="preserve"><value>Copy path</value></data>
 </root>
