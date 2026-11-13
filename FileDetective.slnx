@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FileDetective.App/FileDetective.App.csproj" />
+    <Project Path="src/FileDetective.Core/FileDetective.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FileDetective.Tests/FileDetective.Tests.csproj" />
+  </Folder>
+</Solution>
