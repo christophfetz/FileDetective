@@ -1,0 +1,110 @@
+name: Release
+
+# A tag like v0.1.0 builds, tests and publishes a release with two downloads and a checksum file:
+#   FileDetective-<version>-win-x64-setup.exe   installer (Inno Setup, per user, no admin rights)
+#   FileDetective-<version>-win-x64.zip         the single exe with LICENSE, README.md and CHANGELOG.md
+#   SHA256SUMS.txt                              checksums of both (the in-app update checks the ZIP against it)
+# The notes of the release are the section "## <version>" of CHANGELOG.md. The in-app update looks for these exact names.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Check that tag and project version match
+        id: version
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -notmatch '^v(\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?)$') { throw "The tag '$tag' is not of the form v<major>.<minor>.<patch>[-suffix]." }
+          $version = $Matches[1]
+          [xml]$proj = Get-Content src/FileDetective.App/FileDetective.App.csproj
+          $projectVersion = ($proj.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ } | Select-Object -First 1).Trim()
+          if ($projectVersion -ne $version) { throw "Tag $tag and <Version> $projectVersion in FileDetective.App.csproj differ. Change the version in the project first, then tag." }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "prerelease=$($version.Contains('-').ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          Write-Host "Releasing version $version"
+
+      - name: Release notes from CHANGELOG.md
+        shell: pwsh
+        run: ./.github/scripts/Get-ReleaseNotes.ps1 -ChangelogPath CHANGELOG.md -Version "${{ steps.version.outputs.version }}" -OutputPath release-notes.md
+
+      - name: Build and test
+        run: |
+          dotnet build -c Release
+          dotnet test -c Release --no-build
+
+      - name: Publish (self-contained, one exe)
+        run: dotnet publish src/FileDetective.App -c Release -p:PublishProfile=win-x64
+
+      - name: Package the ZIP
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          New-Item -ItemType Directory -Force dist/package | Out-Null
+          Copy-Item publish/win-x64/FileDetective.exe, LICENSE, README.md, CHANGELOG.md dist/package/
+          Compress-Archive -Path dist/package/* -DestinationPath "dist/FileDetective-$version-win-x64.zip"
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          # Inno Setup is installed machine-wide or in the user profile, depending on how it was set up.
+          $candidates = @(
+            (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
+            (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
+          )
+          $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Installing Inno Setup failed ($LASTEXITCODE)" }
+            $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $iscc) { throw "ISCC.exe not found: $($candidates -join ', ')" }
+          $numeric = ($version -split '[-+]')[0]
+          & $iscc "/DAppVersion=$version" "/DAppVersionNumeric=$numeric" "/DSourceDir=$PWD\dist\package" "/DOutputDir=$PWD\dist" "/DRepoUrl=https://github.com/${{ github.repository }}" installer/FileDetective.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
+
+      - name: Checksums
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $files = @("FileDetective-$version-win-x64-setup.exe", "FileDetective-$version-win-x64.zip")
+          $lines = foreach ($name in $files) {
+            $path = Join-Path dist $name
+            if (-not (Test-Path $path)) { throw "$path is missing" }
+            "{0}  {1}" -f (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant(), $name
+          }
+          [System.IO.File]::WriteAllText((Join-Path $PWD 'dist/SHA256SUMS.txt'), (($lines -join "`n") + "`n"), (New-Object System.Text.UTF8Encoding($false)))
+          Get-Content dist/SHA256SUMS.txt
+          Get-ChildItem dist -File | ForEach-Object { "{0}  {1:N1} MB" -f $_.Name, ($_.Length / 1MB) }
+
+      - name: Create the GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $ghArgs = @(
+            "release", "create", $env:GITHUB_REF_NAME,
+            "dist/FileDetective-$version-win-x64-setup.exe",
+            "dist/FileDetective-$version-win-x64.zip",
+            "dist/SHA256SUMS.txt",
+            "--title", "FileDetective $version",
+            "--notes-file", "release-notes.md"
+          )
+          if ("${{ steps.version.outputs.prerelease }}" -eq "true") { $ghArgs += "--prerelease" }
+          gh @ghArgs
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)" }

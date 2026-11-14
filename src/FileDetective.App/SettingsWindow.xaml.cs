@@ -29,11 +29,8 @@ internal enum SettingsSection
 /// </summary>
 public partial class SettingsWindow : Window
 {
-    /// <summary>
-    /// Link to the repository. Empty until the account is decided (PLAN.md 4, stage 8: <c>UpdateChecker.Repository</c>);
-    /// the line is hidden while it is empty.
-    /// </summary>
-    internal const string RepositoryUrl = "";
+    /// <summary>Link to the repository, derived from <c>UpdateChecker.Repository</c>; empty while that is the placeholder (the line is hidden then).</summary>
+    internal static string RepositoryUrl => UpdateChecker.RepositoryUrl ?? string.Empty;
 
     private readonly AppServices _services;
     private readonly ObservableCollection<LocationItem> _items = [];
@@ -66,6 +63,7 @@ public partial class SettingsWindow : Window
         Loaded += (_, _) =>
         {
             _services.Index.StateChanged += OnIndexStateChanged;
+            _services.Updates.Changed += OnUpdatesChanged;
             _refreshTimer.Start();
             QueueRefresh();
         };
@@ -100,6 +98,7 @@ public partial class SettingsWindow : Window
     {
         _refreshTimer.Stop();
         _services.Index.StateChanged -= OnIndexStateChanged;
+        _services.Updates.Changed -= OnUpdatesChanged;
         CommitExclusions(); // a box that still has the focus has not been saved yet
         _services.SuspendHotkey(false);
     }
@@ -155,10 +154,7 @@ public partial class SettingsWindow : Window
         RebuildHint.Text = Strings.Get("Gen_RebuildHint");
 
         AboutHeading.Text = Strings.Get("Section_About");
-        string version = Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-            ?? "1.0.0";
-        int plus = version.IndexOf('+', StringComparison.Ordinal);
-        VersionText.Text = LocationUi.Format("About_Version", plus > 0 ? version[..plus] : version);
+        VersionText.Text = LocationUi.Format("About_Version", AppInfo.Version);
         LicenseText.Text = Strings.Get("About_License");
         if (RepositoryUrl.Length == 0)
         {
@@ -172,6 +168,7 @@ public partial class SettingsWindow : Window
                 Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
         }
 
+        RefreshUpdateArea();
         DataLabel.Text = Strings.Get("About_DataFolder");
         DataPathBox.Text = AppPaths.DataDirectory;
         OpenDataButton.Content = Strings.Get("Button_OpenFolder");
@@ -537,7 +534,9 @@ public partial class SettingsWindow : Window
         {
             bool on = UpdatesBox.IsChecked == true;
             SaveSettings(s => s with { CheckForUpdates = on });
+            RefreshUpdateArea();
         };
+        UpdateActionButton.Click += (_, _) => OnUpdateActionClicked();
         PolitenessBox.SelectionChanged += (_, _) =>
         {
             if (!_loadingControls && PolitenessBox.SelectedIndex >= 0)
@@ -597,6 +596,58 @@ public partial class SettingsWindow : Window
             SetBusy(false);
             QueueRefresh();
         }
+    }
+
+    private void OnUpdatesChanged() => Dispatcher.BeginInvoke(new Action(RefreshUpdateArea));
+
+    /// <summary>Shows the hint about a newer version with the button to install it or to open the download page.</summary>
+    private void RefreshUpdateArea()
+    {
+        var updates = _services.Updates;
+        if (updates.Available is not { } info)
+        {
+            UpdateAvailableText.Visibility = Visibility.Collapsed;
+            UpdateActionButton.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        UpdateAvailableText.Text = LocationUi.Format("Update_Available", info.Version);
+        UpdateAvailableText.Visibility = Visibility.Visible;
+        bool inPlace = updates.CanInstallInPlace;
+        UpdateActionButton.Content = Strings.Get(inPlace ? "Update_Install" : "Update_OpenPage");
+        UpdateActionButton.IsEnabled = !updates.Installing;
+        UpdateActionButton.Visibility = Visibility.Visible;
+        if (!inPlace && UpdateMessage.Visibility != Visibility.Visible)
+        {
+            ShowUpdateMessage(Strings.Get("Update_ManualHint"), false);
+        }
+    }
+
+    private async void OnUpdateActionClicked()
+    {
+        if (_services.Updates.Available is not { } info)
+        {
+            return;
+        }
+
+        if (!_services.Updates.CanInstallInPlace)
+        {
+            Process.Start(new ProcessStartInfo(info.ReleaseUrl) { UseShellExecute = true });
+            return;
+        }
+
+        ShowUpdateMessage(Strings.Get("Update_Installing"), false);
+        if (await _services.InstallUpdate() is { } message)
+        {
+            ShowUpdateMessage(message, true);
+        }
+    }
+
+    private void ShowUpdateMessage(string text, bool warning)
+    {
+        UpdateMessage.Text = text;
+        UpdateMessage.Foreground = warning ? (Brush)FindResource("WarnBrush") : (Brush)FindResource("MutedBrush");
+        UpdateMessage.Visibility = Visibility.Visible;
     }
 
     private void ShowRebuildMessage(string text, bool warning)

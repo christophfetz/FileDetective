@@ -15,6 +15,11 @@ internal sealed class AppServices
 
     public required AutostartManager Autostart { get; init; }
 
+    public required UpdateController Updates { get; init; }
+
+    /// <summary>Installs the available update; returns null on success (the program restarts) or the message to show.</summary>
+    public required Func<Task<string?>> InstallUpdate { get; init; }
+
     /// <summary>Path of the running exe, for the autostart entry.</summary>
     public required string ExePath { get; init; }
 

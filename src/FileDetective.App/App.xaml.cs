@@ -19,10 +19,28 @@ public partial class App : System.Windows.Application
     private AppServices? _services;
     private FirstRunWindow? _firstRun;
     private SettingsWindow? _settingsWindow;
+    private UpdateController? _updates;
+    private Forms.ToolStripMenuItem? _updateItem;
+    private Mutex? _runningMarker;
+
+    /// <summary>Start after an update: <c>--restart-after &lt;pid&gt;</c> waits for the old process to end first.</summary>
+    private const string RestartAfterArgument = "--restart-after";
 
     private void OnStartup(object sender, System.Windows.StartupEventArgs e)
     {
         bool autostart = e.Args.Contains("--autostart", StringComparer.OrdinalIgnoreCase);
+
+        // After an update the old process starts this one and ends; wait for it (up to 20 s) so that the single-instance
+        // mutex is free. A restart after an update is quiet like an autostart.
+        int restartIndex = Array.FindIndex(e.Args, a => a.Equals(RestartAfterArgument, StringComparison.OrdinalIgnoreCase));
+        if (restartIndex >= 0)
+        {
+            autostart = true;
+            if (restartIndex + 1 < e.Args.Length && int.TryParse(e.Args[restartIndex + 1], out int oldPid))
+            {
+                WaitForProcessEnd(oldPid);
+            }
+        }
 
         // PLAN.md 8.1: unhandled exceptions are logged and reported in the tray; on the UI thread the program goes on.
         // The log starts working as soon as FileLog.Initialize ran below; until then the shared log writes nothing.
@@ -52,7 +70,20 @@ public partial class App : System.Windows.Application
         }
 
         FileLog.Initialize(AppPaths.LogPath);
-        FileLog.Shared.Info($"FileDetective starts. Data folder: {AppPaths.DataDirectory}");
+        FileLog.Shared.Info($"FileDetective {AppInfo.Version} starts. Data folder: {AppPaths.DataDirectory}");
+
+        // Fixed-name marker for the installer (see SingleInstanceGuard.RunningMarkerName); held until the process ends.
+        try
+        {
+            _runningMarker = new Mutex(false, SingleInstanceGuard.RunningMarkerName);
+        }
+        catch (Exception ex)
+        {
+            FileLog.Shared.Error("Creating the running marker failed", ex);
+        }
+
+        string exePath = Environment.ProcessPath ?? string.Empty;
+        _ = Task.Run(() => UpdateInstaller.CleanupOld(exePath)); // the .old exe of a former update
         if (loadResult == SettingsLoadResult.CorruptRenamed)
         {
             FileLog.Shared.Info($"settings.json was unreadable and moved to {_settings.BackupPath}; defaults apply.");
@@ -65,13 +96,18 @@ public partial class App : System.Windows.Application
             ShowBalloon(Strings.Get("Error_Title"), string.Format(
                 CultureInfo.CurrentCulture, Strings.Get("Error_IndexFailed"), ex.Message), Forms.ToolTipIcon.Error)));
 
+        _updates = new UpdateController(Dispatcher, () => _settings.Current.CheckForUpdates, exePath);
+        _updates.Changed += RefreshUpdateItem;
+
         _services = new AppServices
         {
             Settings = _settings,
             Index = _index,
             Drives = new DriveDiscovery(),
             Autostart = new AutostartManager(),
-            ExePath = Environment.ProcessPath ?? System.Reflection.Assembly.GetEntryAssembly()?.Location ?? string.Empty,
+            Updates = _updates,
+            InstallUpdate = InstallUpdateAsync,
+            ExePath = exePath,
             TryApplyHotkey = TryApplyHotkey,
             SuspendHotkey = suspend =>
             {
@@ -108,6 +144,7 @@ public partial class App : System.Windows.Application
         string? hotkeyError = TryApplyHotkey(gesture);
 
         _index.Start();
+        _updates.Start();
 
         if (hotkeyError is not null)
         {
@@ -319,14 +356,19 @@ public partial class App : System.Windows.Application
         var exit = new Forms.ToolStripMenuItem(Strings.Get("Menu_Exit"));
         exit.Click += (_, _) => Shutdown();
 
+        _updateItem = new Forms.ToolStripMenuItem { Visible = false };
+        _updateItem.Click += async (_, _) => await OnUpdateItemClickedAsync();
+
         menu.Items.Add(search);
         menu.Items.Add(update);
         menu.Items.Add(settingsItem);
+        menu.Items.Add(_updateItem);
         menu.Items.Add(_statusItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(exit);
         menu.Opening += (_, _) =>
         {
+            RefreshUpdateItem();
             _statusItem.Text = BuildStatusText();
             update.Enabled = _index is { IsLoaded: true };
         };
@@ -345,6 +387,113 @@ public partial class App : System.Windows.Application
                 ShowSearch();
             }
         };
+    }
+
+    // ---------------------------------------------------------------- updates (PLAN.md 9)
+
+    /// <summary>Shows or hides the "new version" entry of the tray menu. Hidden while there is no newer release.</summary>
+    private void RefreshUpdateItem()
+    {
+        if (_updateItem is null || _updates is null)
+        {
+            return;
+        }
+
+        if (_updates.Available is not { } info)
+        {
+            _updateItem.Visible = false;
+            return;
+        }
+
+        _updateItem.Text = LocationUi.Format(_updates.CanInstallInPlace ? "Menu_NewVersion" : "Menu_NewVersionPage", info.Version);
+        _updateItem.Enabled = !_updates.Installing;
+        _updateItem.Visible = true;
+    }
+
+    private async Task OnUpdateItemClickedAsync()
+    {
+        if (_updates?.Available is not { } info)
+        {
+            return;
+        }
+
+        if (!_updates.CanInstallInPlace)
+        {
+            OpenInBrowser(info.ReleaseUrl);
+            return;
+        }
+
+        ShowBalloon(Strings.Get("Error_Title"), Strings.Get("Update_Installing"), Forms.ToolTipIcon.Info);
+        if (await InstallUpdateAsync() is { } message)
+        {
+            ShowBalloon(Strings.Get("Error_Title"), message, Forms.ToolTipIcon.Warning);
+        }
+    }
+
+    /// <summary>Installs the update; null on success (the program then restarts), otherwise the text to show.</summary>
+    private async Task<string?> InstallUpdateAsync()
+    {
+        if (_updates is null)
+        {
+            return Strings.Get("Update_Failed");
+        }
+
+        var result = await _updates.InstallAsync();
+        if (result.Status == UpdateInstallStatus.Installed)
+        {
+            RestartAfterUpdate();
+            return null;
+        }
+
+        return Strings.Get(result.Status == UpdateInstallStatus.ChecksumMismatch ? "Update_ChecksumFailed" : "Update_Failed");
+    }
+
+    /// <summary>Starts the new exe (it waits for this process to end) and ends this one.</summary>
+    private void RestartAfterUpdate()
+    {
+        try
+        {
+            string exe = _updates?.ExePath ?? string.Empty;
+            using var started = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe)
+            {
+                Arguments = $"{RestartAfterArgument} {Environment.ProcessId}",
+                UseShellExecute = false,
+            });
+            FileLog.Shared.Info("Restarting after the update.");
+        }
+        catch (Exception ex)
+        {
+            FileLog.Shared.Error("Restarting after the update failed", ex);
+            ShowBalloon(Strings.Get("Error_Title"), ex.Message, Forms.ToolTipIcon.Warning);
+            return;
+        }
+
+        Shutdown();
+    }
+
+    private static void OpenInBrowser(string url)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            FileLog.Shared.Error("Opening the release page failed", ex);
+        }
+    }
+
+    private static void WaitForProcessEnd(int pid)
+    {
+        try
+        {
+            using var old = System.Diagnostics.Process.GetProcessById(pid);
+            old.WaitForExit(20_000);
+        }
+        catch (Exception)
+        {
+            // The process is already gone (ArgumentException) or cannot be watched: just go on.
+        }
     }
 
     private void ShowBalloon(string title, string text, Forms.ToolTipIcon icon)
@@ -389,8 +538,12 @@ public partial class App : System.Windows.Application
 
     private void OnExit(object sender, System.Windows.ExitEventArgs e)
     {
+        _updates?.Dispose();
+        _updates = null;
         _guard?.Dispose();
         _guard = null;
+        _runningMarker?.Dispose();
+        _runningMarker = null;
         _hotkey?.Dispose();
         _hotkey = null;
 

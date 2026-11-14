@@ -194,6 +194,9 @@
 
             <TextBlock x:Name="UpdatesLabel" Style="{StaticResource LabelText}" />
             <CheckBox x:Name="UpdatesBox" />
+            <TextBlock x:Name="UpdateAvailableText" Margin="0,8,0,0" FontWeight="SemiBold" Visibility="Collapsed" />
+            <Button x:Name="UpdateActionButton" HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="Collapsed" />
+            <TextBlock x:Name="UpdateMessage" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed" />
 
             <TextBlock x:Name="PolitenessLabel" Style="{StaticResource LabelText}" />
             <ComboBox x:Name="PolitenessBox" HorizontalAlignment="Left" Width="320" />

@@ -146,4 +146,13 @@ Sie werden durch {0} ersetzt. Fortfahren?</value></data>
   <data name="Msg_Rebuilding" xml:space="preserve"><value>Verzeichnis wird neu aufgebaut…</value></data>
   <data name="Msg_Rebuilt" xml:space="preserve"><value>Das Verzeichnis wurde geleert ({0:N0} Einträge entfernt). Alle Orte werden im Hintergrund neu gelesen.</value></data>
   <data name="Msg_RebuildFailed" xml:space="preserve"><value>Das Verzeichnis konnte nicht neu aufgebaut werden, das alte bleibt erhalten: {0}</value></data>
+  <data name="Menu_NewVersion" xml:space="preserve"><value>Version {0} verfügbar – jetzt aktualisieren</value></data>
+  <data name="Menu_NewVersionPage" xml:space="preserve"><value>Version {0} verfügbar – Download-Seite öffnen</value></data>
+  <data name="Update_Available" xml:space="preserve"><value>Version {0} ist verfügbar.</value></data>
+  <data name="Update_Install" xml:space="preserve"><value>Installieren und neu starten</value></data>
+  <data name="Update_OpenPage" xml:space="preserve"><value>Download-Seite öffnen</value></data>
+  <data name="Update_ManualHint" xml:space="preserve"><value>Diese Kopie von FileDetective kann sich nicht selbst ersetzen (ihr Ordner ist nicht beschreibbar, oder es ist nicht das Einzeldatei-Programm). Bitte laden Sie die neue Version von der Release-Seite herunter.</value></data>
+  <data name="Update_Installing" xml:space="preserve"><value>Update wird geladen und geprüft …</value></data>
+  <data name="Update_Failed" xml:space="preserve"><value>Das Update konnte nicht installiert werden. Es wurde nichts verändert. Einzelheiten stehen im Protokoll im Datenordner.</value></data>
+  <data name="Update_ChecksumFailed" xml:space="preserve"><value>Die geladene Datei passt nicht zu ihrer Prüfsumme. Das Update wurde abgebrochen, es wurde nichts verändert.</value></data>
 </root>

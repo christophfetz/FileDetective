@@ -9,6 +9,13 @@
     <ApplicationIcon>Assets\FileDetective.ico</ApplicationIcon>
     <NeutralLanguage>en</NeutralLanguage>
     <RootNamespace>FileDetective.App</RootNamespace>
+    <AssemblyName>FileDetective</AssemblyName>
+    <Product>FileDetective</Product>
+    <Authors>Christoph Fetz</Authors>
+    <Copyright>Copyright (c) 2026 Christoph Fetz, MIT License</Copyright>
+    <!-- Version of the program (release tag is v + this). The workflow stops if the tag and this value differ. -->
+    <Version>0.1.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

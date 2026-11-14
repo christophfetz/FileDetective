@@ -11,6 +11,13 @@ namespace FileDetective.Core;
 /// </summary>
 public sealed class SingleInstanceGuard : IDisposable
 {
+    /// <summary>
+    /// Fixed name of a mutex that every running instance holds, whatever the user or data folder (the guard's own names
+    /// contain a hash of the data folder, too unstable for outsiders). The installer (<c>AppMutex</c> in
+    /// <c>installer/FileDetective.iss</c>) uses it to see that the program runs and asks to close it.
+    /// </summary>
+    public const string RunningMarkerName = @"Local\FileDetective.Running";
+
     private readonly Mutex _mutex;
     private readonly EventWaitHandle _wake;
     private bool _owner;

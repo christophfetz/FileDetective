@@ -146,4 +146,13 @@ They are replaced by {0}. Continue?</value></data>
   <data name="Msg_Rebuilding" xml:space="preserve"><value>Rebuilding the directory…</value></data>
   <data name="Msg_Rebuilt" xml:space="preserve"><value>The directory was emptied ({0:N0} entries removed). All locations are read again in the background.</value></data>
   <data name="Msg_RebuildFailed" xml:space="preserve"><value>The directory could not be rebuilt, the old one is kept: {0}</value></data>
+  <data name="Menu_NewVersion" xml:space="preserve"><value>Version {0} available – update now</value></data>
+  <data name="Menu_NewVersionPage" xml:space="preserve"><value>Version {0} available – open download page</value></data>
+  <data name="Update_Available" xml:space="preserve"><value>Version {0} is available.</value></data>
+  <data name="Update_Install" xml:space="preserve"><value>Install and restart</value></data>
+  <data name="Update_OpenPage" xml:space="preserve"><value>Open download page</value></data>
+  <data name="Update_ManualHint" xml:space="preserve"><value>This copy of FileDetective cannot replace itself (its folder is not writable, or it is not the single-file program). Please download the new version from the release page.</value></data>
+  <data name="Update_Installing" xml:space="preserve"><value>Downloading and checking the update…</value></data>
+  <data name="Update_Failed" xml:space="preserve"><value>The update could not be installed. Nothing was changed. Details are in the log in the data folder.</value></data>
+  <data name="Update_ChecksumFailed" xml:space="preserve"><value>The downloaded file does not match its checksum. The update was stopped and nothing was changed.</value></data>
 </root>
