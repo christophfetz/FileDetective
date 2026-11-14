@@ -14,7 +14,7 @@
   <data name="Tray_UpdatedOn" xml:space="preserve"><value>aktualisiert {0:g}</value></data>
   <data name="Tray_NeverUpdated" xml:space="preserve"><value>noch nicht aktualisiert</value></data>
   <data name="Hotkey_FailedTitle" xml:space="preserve"><value>Tastenkürzel nicht verfügbar</value></data>
-  <data name="Hotkey_FailedText" xml:space="preserve"><value>Alt+Leertaste konnte nicht registriert werden, vermutlich belegt ein anderes Programm es ({0}). Öffnen Sie die Suchleiste über das Symbol im Infobereich.</value></data>
+  <data name="Hotkey_FailedText" xml:space="preserve"><value>{0} konnte nicht registriert werden, vermutlich belegt ein anderes Programm es ({1}). Wählen Sie in den Einstellungen ein anderes Tastenkürzel.</value></data>
   <data name="Error_Title" xml:space="preserve"><value>FileDetective</value></data>
   <data name="Error_IndexFailed" xml:space="preserve"><value>Das Verzeichnis konnte nicht geladen oder aktualisiert werden: {0}</value></data>
   <data name="Bar_Title" xml:space="preserve"><value>FileDetective Suche</value></data>
@@ -37,4 +37,97 @@
   <data name="Ctx_Open" xml:space="preserve"><value>Öffnen</value></data>
   <data name="Ctx_Reveal" xml:space="preserve"><value>Im Explorer zeigen</value></data>
   <data name="Ctx_CopyPath" xml:space="preserve"><value>Pfad kopieren</value></data>
+  <data name="Menu_UpdateNow" xml:space="preserve"><value>Jetzt aktualisieren</value></data>
+  <data name="Menu_Settings" xml:space="preserve"><value>Einstellungen</value></data>
+  <data name="Settings_Title" xml:space="preserve"><value>FileDetective Einstellungen</value></data>
+  <data name="Settings_Loading" xml:space="preserve"><value>Verzeichnis wird geladen …</value></data>
+  <data name="Section_Locations" xml:space="preserve"><value>Orte</value></data>
+  <data name="Section_Exclusions" xml:space="preserve"><value>Ausschlüsse</value></data>
+  <data name="Section_General" xml:space="preserve"><value>Allgemein</value></data>
+  <data name="Section_About" xml:space="preserve"><value>Info</value></data>
+  <data name="Col_Location" xml:space="preserve"><value>Ort</value></data>
+  <data name="Col_Kind" xml:space="preserve"><value>Art</value></data>
+  <data name="Col_Status" xml:space="preserve"><value>Zustand</value></data>
+  <data name="Col_Updated" xml:space="preserve"><value>Letzte Aktualisierung</value></data>
+  <data name="Col_Entries" xml:space="preserve"><value>Einträge</value></data>
+  <data name="Locations_None" xml:space="preserve"><value>Noch keine Orte. Fügen Sie unten einen Ordner hinzu.</value></data>
+  <data name="Kind_Local" xml:space="preserve"><value>Lokal</value></data>
+  <data name="Kind_Network" xml:space="preserve"><value>Netzwerk</value></data>
+  <data name="Kind_Removable" xml:space="preserve"><value>Wechseldatenträger</value></data>
+  <data name="Status_Running" xml:space="preserve"><value>Wird aktualisiert …</value></data>
+  <data name="Status_Queued" xml:space="preserve"><value>Wartet</value></data>
+  <data name="Status_Complete" xml:space="preserve"><value>Aktuell</value></data>
+  <data name="Status_CompleteErrors" xml:space="preserve"><value>Fertig, {0} Ordner nicht lesbar</value></data>
+  <data name="Status_Aborted" xml:space="preserve"><value>Unterbrochen</value></data>
+  <data name="Status_Never" xml:space="preserve"><value>Noch nicht durchlaufen</value></data>
+  <data name="Updated_Today" xml:space="preserve"><value>heute {0:t}</value></data>
+  <data name="Button_Browse" xml:space="preserve"><value>Durchsuchen …</value></data>
+  <data name="Button_Add" xml:space="preserve"><value>Hinzufügen</value></data>
+  <data name="Button_Cancel" xml:space="preserve"><value>Abbrechen</value></data>
+  <data name="Button_UpdateNow" xml:space="preserve"><value>Jetzt aktualisieren</value></data>
+  <data name="Button_Remove" xml:space="preserve"><value>Entfernen</value></data>
+  <data name="Button_ResetExclusions" xml:space="preserve"><value>Auf Standard zurücksetzen</value></data>
+  <data name="Button_Reset" xml:space="preserve"><value>Standard</value></data>
+  <data name="Button_OpenFolder" xml:space="preserve"><value>Ordner öffnen</value></data>
+  <data name="Hint_Network" xml:space="preserve"><value>Von Netzwerkfreigaben werden nur Namen gelesen. Auf dem Server wird nichts gespeichert und keine Datei geöffnet. Besser nur die benötigten Unterordner wählen.</value></data>
+  <data name="Option_Autostart" xml:space="preserve"><value>Mit Windows starten</value></data>
+  <data name="Option_CheckUpdates" xml:space="preserve"><value>Auf neue Versionen prüfen (einmal täglich)</value></data>
+  <data name="Dialog_PickFolder" xml:space="preserve"><value>Ordner zum Durchsuchen wählen</value></data>
+  <data name="FirstRun_Title" xml:space="preserve"><value>Willkommen bei FileDetective</value></data>
+  <data name="FirstRun_Heading" xml:space="preserve"><value>Wo soll FileDetective suchen?</value></data>
+  <data name="FirstRun_Intro" xml:space="preserve"><value>Haken Sie die Orte an, deren Datei- und Ordnernamen durchsuchbar sein sollen. Das lässt sich später in den Einstellungen ändern. Verschachtelte Orte sind nicht möglich: Enthält einer einen anderen, bleibt nur der äußere.</value></data>
+  <data name="FirstRun_Loading" xml:space="preserve"><value>Laufwerke werden gesucht …</value></data>
+  <data name="FirstRun_LoadFailed" xml:space="preserve"><value>Das Verzeichnis konnte nicht geöffnet werden. Siehe Protokoll im Datenordner.</value></data>
+  <data name="FirstRun_Start" xml:space="preserve"><value>Los</value></data>
+  <data name="FirstRun_Hotkey" xml:space="preserve"><value>Die Suchleiste öffnen Sie mit {0}. Das Tastenkürzel lässt sich in den Einstellungen ändern.</value></data>
+  <data name="Row_UserFolder" xml:space="preserve"><value>Benutzerordner</value></data>
+  <data name="Row_AlreadyAdded" xml:space="preserve"><value>bereits hinzugefügt</value></data>
+  <data name="Row_ReplacedBy" xml:space="preserve"><value>ersetzt durch {0}</value></data>
+  <data name="Row_ContainedIn" xml:space="preserve"><value>enthalten in {0}</value></data>
+  <data name="Msg_InvalidPath" xml:space="preserve"><value>Das ist kein gültiger Ordnerpfad. Geben Sie einen Laufwerkspfad wie D:\Daten oder einen Netzwerkpfad wie \\server\freigabe ein.</value></data>
+  <data name="Msg_AlreadyInList" xml:space="preserve"><value>Dieser Ort ist schon in der Liste.</value></data>
+  <data name="Msg_NotReachable" xml:space="preserve"><value>{0} ist nicht erreichbar.</value></data>
+  <data name="Msg_SetupFailed" xml:space="preserve"><value>Speichern fehlgeschlagen: {0}</value></data>
+  <data name="Msg_InsideExisting" xml:space="preserve"><value>Dieser Ordner liegt im vorhandenen Ort {0}. Verschachtelte Orte sind nicht erlaubt, der äußere deckt ihn schon ab.</value></data>
+  <data name="Msg_Checking" xml:space="preserve"><value>Ordner wird geprüft …</value></data>
+  <data name="Msg_Added" xml:space="preserve"><value>{0} hinzugefügt. Der erste Durchlauf läuft im Hintergrund.</value></data>
+  <data name="Msg_AddFailed" xml:space="preserve"><value>Der Ort konnte nicht hinzugefügt werden: {0}</value></data>
+  <data name="Msg_Removing" xml:space="preserve"><value>Wird entfernt …</value></data>
+  <data name="Msg_Removed" xml:space="preserve"><value>{0} entfernt.</value></data>
+  <data name="Msg_RemoveFailed" xml:space="preserve"><value>Der Ort konnte nicht entfernt werden: {0}</value></data>
+  <data name="Msg_SaveFailed" xml:space="preserve"><value>Die Einstellungen konnten nicht gespeichert werden: {0}</value></data>
+  <data name="Msg_AutostartFailed" xml:space="preserve"><value>Der Start mit Windows konnte nicht geändert werden: {0}</value></data>
+  <data name="Confirm_Replace" xml:space="preserve"><value>{0} enthält diese Orte:
+
+{1}
+
+Sie werden durch {0} ersetzt. Fortfahren?</value></data>
+  <data name="Confirm_Remove" xml:space="preserve"><value>{0} aus dem Verzeichnis entfernen? Die Einträge werden aus dem Index gelöscht. Ihre Dateien bleiben unberührt.</value></data>
+  <data name="Excl_Intro" xml:space="preserve"><value>Ausgeschlossene Ordner und Dateien kommen nicht ins Verzeichnis. Änderungen gelten ab der nächsten Aktualisierung. Ein Eintrag pro Zeile.</value></data>
+  <data name="Excl_Folders" xml:space="preserve"><value>Ordnernamen (überall)</value></data>
+  <data name="Excl_FoldersHint" xml:space="preserve"><value>Ein Ordner mit diesem Namen wird überall übersprungen.</value></data>
+  <data name="Excl_Paths" xml:space="preserve"><value>Volle Pfade</value></data>
+  <data name="Excl_PathsHint" xml:space="preserve"><value>Umgebungsvariablen wie %WINDIR% und * innerhalb eines Pfadteils sind erlaubt, z. B. C:\Users\*\AppData.</value></data>
+  <data name="Excl_Files" xml:space="preserve"><value>Dateinamen</value></data>
+  <data name="Excl_FilesHint" xml:space="preserve"><value>Mit * als Platzhalter, z. B. *.tmp.</value></data>
+  <data name="Excl_SystemHint" xml:space="preserve"><value>Einträge mit dem Windows-Systemattribut werden immer übersprungen. Versteckte Dateien werden aufgenommen.</value></data>
+  <data name="Gen_Hotkey" xml:space="preserve"><value>Tastenkürzel zum Öffnen der Suchleiste</value></data>
+  <data name="Gen_Startup" xml:space="preserve"><value>Start</value></data>
+  <data name="Gen_Language" xml:space="preserve"><value>Sprache</value></data>
+  <data name="Gen_LanguageHint" xml:space="preserve"><value>Eine Änderung wirkt nach dem nächsten Start von FileDetective.</value></data>
+  <data name="Gen_Updates" xml:space="preserve"><value>Updates</value></data>
+  <data name="Gen_Politeness" xml:space="preserve"><value>Netzwerkfreigaben</value></data>
+  <data name="Gen_PolitenessHint" xml:space="preserve"><value>Durchläufe von Freigaben nutzen immer eine Verbindung mit Pausen. „Sehr schonend“ pausiert viermal so lange.</value></data>
+  <data name="Lang_System" xml:space="preserve"><value>Windows-Sprache</value></data>
+  <data name="Polite_Normal" xml:space="preserve"><value>Normal</value></data>
+  <data name="Polite_VeryGentle" xml:space="preserve"><value>Sehr schonend</value></data>
+  <data name="About_Version" xml:space="preserve"><value>Version {0}</value></data>
+  <data name="About_License" xml:space="preserve"><value>MIT-Lizenz</value></data>
+  <data name="About_DataFolder" xml:space="preserve"><value>Datenordner</value></data>
+  <data name="About_Privacy" xml:space="preserve"><value>FileDetective liest nur Namen. Es sendet keine Daten über Sie. Die einzige Verbindung ins Internet ist die abschaltbare Prüfung auf neue Versionen.</value></data>
+  <data name="Hotkey_Press" xml:space="preserve"><value>Neues Tastenkürzel drücken …</value></data>
+  <data name="Hotkey_Invalid" xml:space="preserve"><value>Verwenden Sie Alt, Strg oder Win zusammen mit Buchstabe, Ziffer, F-Taste oder Leertaste, Tab, Eingabe, Pfeiltasten.</value></data>
+  <data name="Hotkey_Refused" xml:space="preserve"><value>{0} konnte nicht registriert werden ({1}). Das bisherige Tastenkürzel bleibt.</value></data>
+  <data name="Hotkey_Changed" xml:space="preserve"><value>Das Tastenkürzel ist jetzt {0}.</value></data>
+  <data name="Hotkey_NoWindow" xml:space="preserve"><value>Das Fenster für das Tastenkürzel konnte nicht erstellt werden.</value></data>
 </root>

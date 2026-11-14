@@ -285,6 +285,26 @@ public sealed class IndexStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// Number of stored entries per location (the root entry counts), for the settings window. One pass over the table;
+    /// call it from a background thread.
+    /// </summary>
+    public IReadOnlyDictionary<byte, int> CountEntriesByRoot()
+    {
+        lock (_readLock)
+        {
+            var result = new Dictionary<byte, int>();
+            using var cmd = Command(_readConnection, null, "SELECT root_id, COUNT(*) FROM entries GROUP BY root_id");
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                result[(byte)r.GetInt32(0)] = r.GetInt32(1);
+            }
+
+            return result;
+        }
+    }
+
     // ---------------------------------------------------------------- reading for the scanner
 
     /// <summary>The children of a folder as stored in the database (for the comparison in PLAN.md 7.2).</summary>

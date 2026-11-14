@@ -14,6 +14,8 @@ internal static class AppPaths
 
     public static string DatabasePath => Path.Combine(DataDirectory, "index.db");
 
+    public static string SettingsPath => Path.Combine(DataDirectory, "settings.json");
+
     public static string LogPath => Path.Combine(DataDirectory, "filedetective.log");
 
     private static string ResolveDataDirectory()

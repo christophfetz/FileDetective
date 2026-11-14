@@ -551,7 +551,7 @@ Abnahme durch Tests: gleiche Größe mit verschiedenem Inhalt ist keine Dublette
 - [x] Etappe 2 – Datenbank und Speicher
 - [x] Etappe 3 – Durchlauf
 - [x] Etappe 4 – Suchleiste
-- [ ] Etappe 5 – Orte und Einstellungen
+- [x] Etappe 5 – Orte und Einstellungen
 - [ ] Etappe 6 – Aktualität
 - [ ] Etappe 7 – Feinschliff
 - [ ] Etappe 8 – Veröffentlichung
