@@ -19,7 +19,7 @@ Diese Regeln gelten in jeder Etappe und dürfen nie verletzt werden. Sie sind de
 3. **Freigaben werden mit genau einem Thread und mit Pausen durchlaufen** (Abschnitt 7.4).
 4. **Freigaben werden höchstens einmal täglich automatisch aktualisiert**, zusätzlich nur auf ausdrücklichen Klick.
 5. **Ein fehlgeschlagenes Auflisten löscht nie Einträge aus dem Verzeichnis.** Gelöscht wird nur, was ein erfolgreich und vollständig gelesenes Verzeichnis als fehlend ausweist.
-6. **Keine Adminrechte**, weder zur Installation noch zur Laufzeit.
+6. **Keine Adminrechte**, weder zur Installation noch zur Laufzeit. Einzige Ausnahme (Nutzerentscheidung 2026-11-14): die Speicherplatz-Analyse auf ausdrücklichen Klick als eigener Prozess mit Adminrechten, siehe 11.1.
 7. **Keine Telemetrie.** Die einzige Verbindung ins Internet ist die abschaltbare Update-Prüfung bei GitHub.
 8. **Nur Abhängigkeiten mit freizügiger Lizenz** (MIT, Apache-2.0, BSD, Public Domain). Keine GPL/LGPL.
 9. **Das Programm löscht nie selbstständig Dateien.** In Version 2 verschiebt es nur lokale Dateien auf ausdrücklichen Klick in den Papierkorb. Auf Freigaben gibt es kein Löschen.
@@ -35,7 +35,7 @@ Diese Regeln gelten in jeder Etappe und dürfen nie verletzt werden. Sie sind de
 | Suchumfang v1 | nur Datei- und Ordnernamen |
 | Suchlogik | mehrere Wörter in beliebiger Reihenfolge, alle müssen in Name oder Pfad vorkommen, Groß-/Kleinschreibung egal, `müller` = `mueller`, keine Tippfehler-Toleranz |
 | Rangfolge | Treffer im Namen vor Treffern im Pfad, dann über das Tool geöffnete, dann zuletzt geänderte |
-| Bedienung | Tab schaltet Alles/Dateien/Ordner, `.pdf` filtert nach Typ, Enter öffnet, Strg+Enter zeigt im Explorer, Strg+C kopiert den Pfad |
+| Bedienung | Tab schaltet Alles/Dateien/Ordner/Programme, `.pdf` filtert nach Typ, Enter öffnet, Strg+Enter zeigt im Explorer, Strg+C kopiert den Pfad |
 | Orte | Auswahlliste beim ersten Start, Benutzerordner vorausgewählt, Freigaben nur nach bewusstem Anhaken |
 | Ausschlüsse | Systemordner und Entwickler-Ballast standardmäßig, Liste anpassbar |
 | Aktualität | lokale Orte laufend, Freigaben höchstens täglich und auf Knopfdruck |
@@ -204,7 +204,7 @@ Wenn beim Start die höchste vergebene Nummer deutlich über der Zahl der Eintr�
 - Ein Begriff mit `\` oder `/` wird an diesen Zeichen in mehrere Begriffe geteilt.
 - Ein Begriff der Form `.` plus 1–10 Buchstaben/Ziffern ist ein Typfilter (Namensende). Mehrere Typfilter gelten als „oder“.
 - Jeder Begriff wird in die Suchform gebracht.
-- Dazu kommt der Modus Alles / Dateien / Ordner.
+- Dazu kommt der Modus Alles / Dateien / Ordner / Programme. „Programme“ (nachgetragen am 2026-11-14 nach Rückmeldung des Nutzers) zeigt nur Dateien mit den Endungen `.lnk`, `.appref-ms`, `.url` und `.exe`; `.exe` unterhalb eines Ordners `bin`, `obj`, `publish`, `packages` oder `.nuget` zählt nicht dazu.
 
 **Treffer bestimmen**
 
@@ -527,6 +527,8 @@ Eigenes Fenster, erreichbar über das Infobereich-Menü. Aufklappbare Ordnerlist
 - **Lokale Laufwerke**: über einen eigenen vollständigen Durchlauf auf Klick, ohne Ausschlüsse, in eine Struktur im Arbeitsspeicher, die mit dem Schließen des Fensters verworfen wird. Grund: Das Suchverzeichnis lässt `Windows`, `Program Files` und `AppData` aus, und genau dort liegt oft der meiste Platz. Der Durchlauf nutzt denselben `Scanner` mit anderer Ausschlussregel und anderem Ziel.
 
 Ohne Adminrechte sind einige Ordner nicht lesbar. Die Differenz zwischen belegtem Platz laut Laufwerk und der Summe der gelesenen Dateien erscheint als eigene Zeile „Nicht lesbar oder Systembereich“.
+
+**Gesperrte Ordner und Admin-Analyse** (nachgetragen am 2026-11-14 nach Rückmeldung des Nutzers): Die Zeile „Nicht lesbar oder Systembereich“ lässt sich aufklappen und listet die Ordner, die beim Durchlauf nicht aufgelistet werden konnten (z. B. `System Volume Information`, `Program Files\WindowsApps`, `Recovery`). Ein Knopf „Als Administrator analysieren …“ startet nur auf Klick einen eigenen Prozess mit Adminrechten (UAC-Abfrage), der nur das Speicherplatz-Fenster zeigt. Suche, Verzeichnis, Hotkey, Infobereich und Updates laufen in diesem Prozess nicht, und er schreibt nichts in den Datenordner. Wer Adminrechte bekommt, darf dort auch in den Papierkorb verschieben und den Papierkorb leeren; die Sperren für Laufwerkswurzel, Papierkorb, `System Volume Information` und den Windows-Ordner gelten weiter. Ohne Adminrechte (Abfrage abgelehnt oder nicht möglich) bleibt alles wie bisher.
 
 Dateien, die nur in der Cloud liegen (Attribute `RecallOnDataAccess` oder `Offline`), werden gekennzeichnet und zählen nicht zur belegten Größe.
 

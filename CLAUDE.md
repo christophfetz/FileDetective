@@ -10,7 +10,7 @@ Windows-Programm (C#, .NET 10, WPF), das Dateien und Ordner über ihren Namen fi
 2. Auf durchsuchten Orten nie schreiben. Eigene Daten nur unter `%LOCALAPPDATA%\FileDetective\`.
 3. Freigaben mit genau einem Thread und mit Pausen durchlaufen, automatisch höchstens einmal täglich.
 4. Ein fehlgeschlagenes Auflisten löscht nie Einträge. `IgnoreInaccessible = true` ist verboten.
-5. Keine Adminrechte, keine Telemetrie.
+5. Keine Adminrechte, keine Telemetrie. Einzige Ausnahme: die Speicherplatz-Analyse darf auf ausdrücklichen Klick als eigener Prozess mit Adminrechten starten (PLAN.md 11.1). Suche und Verzeichnis laufen nie mit Adminrechten.
 6. Nur Abhängigkeiten mit freizügiger Lizenz; neue Pakete nur nach Rückfrage beim Nutzer.
 7. Das Programm löscht nie selbstständig Dateien.
 
