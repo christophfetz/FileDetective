@@ -254,7 +254,13 @@ public partial class SearchBarWindow : Window
         if (_viewModel.SelectedItem is null)
         {
             e.Handled = true; // nothing under the pointer: no menu
+            return;
         }
+
+        // PLAN.md 8.4: hits of an unreachable location can only have their path copied.
+        bool canOpen = _viewModel.CanOpenSelected;
+        OpenMenuItem.IsEnabled = canOpen;
+        RevealMenuItem.IsEnabled = canOpen;
     }
 
     private static ListBoxItem? ItemUnder(DependencyObject? source)

@@ -15,6 +15,9 @@ internal sealed partial class SearchBarViewModel : ObservableObject
     /// <summary>Seconds a path lookup may take before the location counts as not reachable (PLAN.md 7.7: 5 s).</summary>
     private static readonly TimeSpan ExistenceTimeout = TimeSpan.FromSeconds(5);
 
+    /// <summary>Characters of the scanned location shown in the footer before it is cut in the middle.</summary>
+    private const int ScanPathDisplayLength = 40;
+
     private readonly IndexService _index;
     private readonly Dispatcher _dispatcher;
     private readonly SearchCoordinator _coordinator;
@@ -70,6 +73,9 @@ internal sealed partial class SearchBarViewModel : ObservableObject
     /// <summary>The selected row or null.</summary>
     public HitItem? SelectedItem => SelectedIndex >= 0 && SelectedIndex < Hits.Count ? Hits[SelectedIndex] : null;
 
+    /// <summary>Open and Show in Explorer are possible: a row is selected and its location is not known as unreachable.</summary>
+    public bool CanOpenSelected => SelectedItem is { IsUnreachable: false };
+
     partial void OnInputChanged(string value)
     {
         _transientMessage = null;
@@ -85,20 +91,33 @@ internal sealed partial class SearchBarViewModel : ObservableObject
 
     partial void OnHitsChanged(IReadOnlyList<HitItem> value) => OnPropertyChanged(nameof(HasHits));
 
-    partial void OnSelectedIndexChanged(int value) => OnPropertyChanged(nameof(SelectedItem));
+    partial void OnSelectedIndexChanged(int value)
+    {
+        OnPropertyChanged(nameof(SelectedItem));
+        OnPropertyChanged(nameof(CanOpenSelected));
+    }
 
     /// <summary>Called each time the bar is shown: refreshes the results (the directory may have grown) and the footer.</summary>
     public void OnShown()
     {
         _transientMessage = null;
+
+        // PLAN.md 7.7: check the locations again if the last check is older than 60 s; in the background, the bar
+        // does not wait for it. A change re-runs the search through StateChanged.
+        _index.OnBarShown();
         StartSearch();
     }
 
-    /// <summary>Called about once a second while the bar is visible and the directory is still being built.</summary>
+    /// <summary>Called about once a second while the bar is visible: progress of the first scan or of a running scan.</summary>
     public void Tick()
     {
         if (_index.Phase == IndexPhase.Ready)
         {
+            if (_index.CurrentScan is not null)
+            {
+                RefreshFooter();
+            }
+
             return;
         }
 
@@ -178,7 +197,7 @@ internal sealed partial class SearchBarViewModel : ObservableObject
         var items = new List<HitItem>(result.Hits.Count);
         foreach (var hit in result.Hits)
         {
-            items.Add(HitItem.From(hit));
+            items.Add(HitItem.From(hit, _index.IsLocationUnreachable(hit.Details.RootId)));
         }
 
         // Keep the selected entry when the list is refreshed for the same input (e.g. while the first scan runs).
@@ -211,14 +230,26 @@ internal sealed partial class SearchBarViewModel : ObservableObject
             return;
         }
 
+        if (item.IsUnreachable)
+        {
+            // PLAN.md 8.4: for unreachable locations only "Copy path" is possible.
+            SetTransient(Strings.Get("Footer_NotConnected"));
+            return;
+        }
+
         _busy = true;
         try
         {
             string path = item.FullPath;
             var check = Task.Run(() => ExistenceCheck.Evaluate(
-                path, [.. store.GetRoots().Select(r => r.Path)], FileSystemPathProbe.Instance));
+                path, [.. store.GetRoots().Select(r => r.Path)], FileSystemPathProbe.Instance, _index.IsLocationPathUnreachable));
             var finished = await Task.WhenAny(check, Task.Delay(ExistenceTimeout));
             var result = finished == check ? await check : ExistenceResult.Unknown;
+            if (result == ExistenceResult.Unknown)
+            {
+                // Maybe the location went away: check it, so its hits are greyed out if so.
+                _index.RecheckLocation(item.RootId);
+            }
 
             switch (result)
             {
@@ -295,9 +326,20 @@ internal sealed partial class SearchBarViewModel : ObservableObject
                 return string.Format(culture, Strings.Get("Footer_FirstScan"), _index.EntryCount);
         }
 
+        // Stage 6: a running scan is shown with its location and the entries counted so far.
+        var scan = _index.CurrentScan;
+        string? scanPath = scan is { } s ? PathShortener.ShortenMiddle(s.Path, ScanPathDisplayLength) : null;
+
         if (_queryEmpty)
         {
-            return Strings.Get("Footer_Idle");
+            if (scanPath is not null)
+            {
+                return string.Format(culture, Strings.Get("Footer_IdleScanning"), scanPath, scan!.Value.Entries);
+            }
+
+            return _index.LastCompleted is { } completed
+                ? string.Format(culture, Strings.Get("Footer_IdleUpdated"), UpdatedText(completed))
+                : Strings.Get("Footer_Idle");
         }
 
         if (_total == 0)
@@ -305,8 +347,23 @@ internal sealed partial class SearchBarViewModel : ObservableObject
             return Strings.Get("Footer_None");
         }
 
+        if (scanPath is not null)
+        {
+            return string.Format(culture, Strings.Get("Footer_HitsScanning"), _total, scanPath, scan!.Value.Entries);
+        }
+
         return _total > Hits.Count
             ? string.Format(culture, Strings.Get("Footer_HitsLimited"), _total, Hits.Count)
             : string.Format(culture, Strings.Get("Footer_Hits"), _total);
+    }
+
+    /// <summary>"updated today 08:12" or "updated 12.11.2026 08:12" (shared with the tray status line).</summary>
+    public static string UpdatedText(DateTimeOffset completed)
+    {
+        var local = completed.LocalDateTime;
+        return string.Format(
+            CultureInfo.CurrentCulture,
+            Strings.Get(local.Date == DateTime.Today ? "Tray_UpdatedToday" : "Tray_UpdatedOn"),
+            local);
     }
 }

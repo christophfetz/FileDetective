@@ -269,17 +269,19 @@ public partial class App : System.Windows.Application
 
         var culture = CultureInfo.CurrentCulture;
         string stamp;
-        if (_index.ScanPendingOrRunning)
+        if (_index.CurrentScan is { } scan)
+        {
+            // Stage 6: the running scan with its location and the entries counted so far.
+            stamp = string.Format(
+                culture, Strings.Get("Tray_Scanning"), PathShortener.ShortenMiddle(scan.Path, 40), scan.Entries);
+        }
+        else if (_index.ScanPendingOrRunning)
         {
             stamp = Strings.Get("Tray_Updating");
         }
         else if (_index.LastCompleted is { } completed)
         {
-            var local = completed.LocalDateTime;
-            stamp = string.Format(
-                culture,
-                Strings.Get(local.Date == DateTime.Today ? "Tray_UpdatedToday" : "Tray_UpdatedOn"),
-                local);
+            stamp = SearchBarViewModel.UpdatedText(completed);
         }
         else
         {

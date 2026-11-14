@@ -11,12 +11,15 @@ internal sealed class HitItem
     /// <summary>Characters of the folder path shown before it is cut in the middle; fits the 300 DIP path column.</summary>
     public const int FolderDisplayLength = 44;
 
-    private HitItem(SearchHit hit)
+    private HitItem(SearchHit hit, bool unreachable)
     {
         var d = hit.Details;
         EntryId = hit.EntryId;
+        RootId = d.RootId;
         FullPath = d.FullPath;
         IsDirectory = d.IsDirectory;
+        IsUnreachable = unreachable;
+        NotConnectedText = unreachable ? Strings.Get("Hit_NotConnected") : string.Empty;
 
         // The root entry of a location carries its whole path as name; show its last folder name instead.
         Name = d.Name.Contains('\\') || d.Name.Contains('/')
@@ -31,6 +34,17 @@ internal sealed class HitItem
     }
 
     public int EntryId { get; }
+
+    /// <summary>The location of the hit.</summary>
+    public byte RootId { get; }
+
+    /// <summary>
+    /// The location is known to be unreachable (PLAN.md 8.4): the row is greyed out with "not connected", and only
+    /// "Copy path" is possible.
+    /// </summary>
+    public bool IsUnreachable { get; }
+
+    public string NotConnectedText { get; }
 
     public string FullPath { get; }
 
@@ -47,5 +61,5 @@ internal sealed class HitItem
     public ImageSource? Icon { get; }
 
     /// <summary>Creates the row; touches the icon cache, so call it on the UI thread.</summary>
-    public static HitItem From(SearchHit hit) => new(hit);
+    public static HitItem From(SearchHit hit, bool unreachable) => new(hit, unreachable);
 }

@@ -303,7 +303,7 @@ public partial class SettingsWindow : Window
                 foreach (var root in roots)
                 {
                     int? count = counts is null ? null : counts.GetValueOrDefault(root.Id);
-                    _items.Add(new LocationItem(root, index.GetScanState(root.Id), count));
+                    _items.Add(new LocationItem(root, index.GetScanState(root.Id), count, index.IsLocationUnreachable(root.Id)));
                 }
 
                 if (selected is { } id && _items.FirstOrDefault(i => i.Id == id) is { } again)

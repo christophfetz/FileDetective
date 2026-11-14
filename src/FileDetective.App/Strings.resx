@@ -130,4 +130,11 @@ They are replaced by {0}. Continue?</value></data>
   <data name="Hotkey_Refused" xml:space="preserve"><value>{0} could not be registered ({1}). The previous shortcut stays.</value></data>
   <data name="Hotkey_Changed" xml:space="preserve"><value>The shortcut is now {0}.</value></data>
   <data name="Hotkey_NoWindow" xml:space="preserve"><value>The hotkey window could not be created.</value></data>
+  <data name="Tray_Scanning" xml:space="preserve"><value>scanning {0} ({1:N0} entries so far)</value></data>
+  <data name="Footer_IdleUpdated" xml:space="preserve"><value>Type to search · {0} · Esc close</value></data>
+  <data name="Footer_IdleScanning" xml:space="preserve"><value>Scanning {0}: {1:N0} entries · Esc close</value></data>
+  <data name="Footer_HitsScanning" xml:space="preserve"><value>{0:N0} hits · scanning {1}: {2:N0} entries</value></data>
+  <data name="Footer_NotConnected" xml:space="preserve"><value>This location is not connected. Only Copy path (Ctrl+C) is possible.</value></data>
+  <data name="Hit_NotConnected" xml:space="preserve"><value>not connected</value></data>
+  <data name="Status_NotConnected" xml:space="preserve"><value>Not connected</value></data>
 </root>

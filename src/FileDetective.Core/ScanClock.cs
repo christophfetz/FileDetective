@@ -29,11 +29,34 @@ public sealed class SystemScanClock : IScanClock
 
     public TimeSpan Elapsed => Stopwatch.GetElapsedTime(_start);
 
+    /// <remarks>
+    /// Stage 6 fix: this used <c>WaitHandle.WaitOne(duration)</c> once. <c>WaitOne(TimeSpan)</c> cuts the time to whole
+    /// milliseconds, so every pause below 1 ms (the measured listing duration of a fast share) did not wait at all, and a
+    /// wait may also end slightly early. The scan statistics still counted these pauses as taken. Now the wait is
+    /// rounded up and repeated until the full measured duration has passed.
+    /// </remarks>
     public void Pause(TimeSpan duration, CancellationToken cancellationToken)
     {
-        if (duration > TimeSpan.Zero)
+        cancellationToken.ThrowIfCancellationRequested();
+        if (duration <= TimeSpan.Zero)
         {
-            cancellationToken.WaitHandle.WaitOne(duration);
+            return;
+        }
+
+        long start = Stopwatch.GetTimestamp();
+        while (true)
+        {
+            var left = duration - Stopwatch.GetElapsedTime(start);
+            if (left <= TimeSpan.Zero)
+            {
+                break;
+            }
+
+            int milliseconds = (int)Math.Min(int.MaxValue - 1, Math.Ceiling(left.TotalMilliseconds));
+            if (cancellationToken.WaitHandle.WaitOne(milliseconds))
+            {
+                break; // cancelled
+            }
         }
 
         cancellationToken.ThrowIfCancellationRequested();

@@ -27,9 +27,12 @@ public sealed class NoUsage : IUsageLookup
     }
 }
 
-/// <summary>Display data of one entry, resolved outside the in-memory index (database from stage 2 on).</summary>
+/// <summary>
+/// Display data of one entry, resolved outside the in-memory index (database from stage 2 on). <see cref="RootId"/> is the
+/// location (stage 6, for greying out hits of unreachable locations); 0 if the resolver does not know it.
+/// </summary>
 public sealed record EntryDetails(
-    string FullPath, string Name, bool IsDirectory, long Size, DateTime LastWriteUtc, FileAttributes Attributes);
+    string FullPath, string Name, bool IsDirectory, long Size, DateTime LastWriteUtc, FileAttributes Attributes, byte RootId = 0);
 
 /// <summary>Resolves entry numbers to full path and display data.</summary>
 public interface IEntryResolver

@@ -57,6 +57,12 @@ public sealed class ScannerOptions
 
     /// <summary>Clock and pause; default <see cref="SystemScanClock"/>.</summary>
     public IScanClock? Clock { get; init; }
+
+    /// <summary>
+    /// Called on the scanning thread after every processed directory with the number of entries counted so far
+    /// (stage 6: progress in the tray status line and the footer). Must be cheap and must not throw.
+    /// </summary>
+    public Action<long>? Progress { get; init; }
 }
 
 /// <summary>
@@ -95,6 +101,7 @@ public sealed class Scanner
     private readonly IScanClock _clock;
     private readonly int _batchSize;
     private readonly NetworkPoliteness _politeness;
+    private readonly Action<long>? _progress;
     private int _running;
 
     public Scanner(IndexStore store, IDirectoryLister lister, ExcludeRules excludeRules, ScannerOptions? options = null)
@@ -111,6 +118,7 @@ public sealed class Scanner
         _clock = options.Clock ?? SystemScanClock.Instance;
         _batchSize = options.BatchSize;
         _politeness = options.Politeness;
+        _progress = options.Progress;
     }
 
     /// <summary>True while a scan of this instance runs.</summary>
@@ -477,6 +485,8 @@ public sealed class Scanner
                     }
                 }
             }
+
+            owner._progress?.Invoke(_entries);
         }
 
         private static KnownChild? TakeMatch(Dictionary<string, List<KnownChild>> known, string name)

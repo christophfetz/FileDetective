@@ -7,14 +7,16 @@ namespace FileDetective.App.ViewModels;
 /// <summary>One line of the location list in the settings: a location with state, last update and entry count.</summary>
 internal sealed class LocationItem
 {
-    public LocationItem(RootInfo root, LocationScanState scanState, int? entryCount)
+    public LocationItem(RootInfo root, QueuedScanState scanState, int? entryCount, bool unreachable)
     {
         Id = root.Id;
         Root = root;
         Path = root.Path;
         UncPath = root.UncPath ?? string.Empty;
         KindText = LocationUi.KindText(root.Kind);
-        StatusText = StatusOf(root, scanState);
+        StatusText = scanState == QueuedScanState.Idle && unreachable
+            ? Strings.Get("Status_NotConnected")
+            : StatusOf(root, scanState);
         UpdatedText = UpdatedOf(root);
         EntriesText = entryCount is { } n ? n.ToString("N0", CultureInfo.CurrentCulture) : "…";
     }
@@ -37,14 +39,14 @@ internal sealed class LocationItem
 
     public string EntriesText { get; }
 
-    private static string StatusOf(RootInfo root, LocationScanState scanState)
+    private static string StatusOf(RootInfo root, QueuedScanState scanState)
     {
-        if (scanState == LocationScanState.Running)
+        if (scanState == QueuedScanState.Running)
         {
             return Strings.Get("Status_Running");
         }
 
-        if (scanState == LocationScanState.Queued)
+        if (scanState == QueuedScanState.Queued)
         {
             return Strings.Get("Status_Queued");
         }

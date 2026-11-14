@@ -27,7 +27,7 @@ public sealed class DatabaseEntryResolver(IndexDatabase database) : IEntryResolv
         using var transaction = connection.BeginTransaction(deferred: true);
         using var cmd = connection.CreateCommand();
         cmd.Transaction = transaction;
-        cmd.CommandText = "SELECT parent_id, name, is_dir, size, mtime, attrs FROM entries WHERE id = @id";
+        cmd.CommandText = "SELECT parent_id, name, is_dir, size, mtime, attrs, root_id FROM entries WHERE id = @id";
         var idParam = cmd.Parameters.Add("@id", SqliteType.Integer);
 
         // Parent and name of folders already seen, shared by all hits of this call (hits often share folders).
@@ -43,6 +43,7 @@ public sealed class DatabaseEntryResolver(IndexDatabase database) : IEntryResolv
             long size;
             long mtime;
             int attrs;
+            byte rootId;
             using (var r = cmd.ExecuteReader())
             {
                 if (!r.Read())
@@ -56,6 +57,7 @@ public sealed class DatabaseEntryResolver(IndexDatabase database) : IEntryResolv
                 size = r.GetInt64(3);
                 mtime = r.GetInt64(4);
                 attrs = r.GetInt32(5);
+                rootId = (byte)r.GetInt32(6);
             }
 
             string? path = BuildPath(cmd, idParam, folders, parent, name);
@@ -65,7 +67,7 @@ public sealed class DatabaseEntryResolver(IndexDatabase database) : IEntryResolv
             }
 
             result[i] = new EntryDetails(
-                path, name, isDir, size, DateTime.UnixEpoch.AddSeconds(mtime), (FileAttributes)attrs);
+                path, name, isDir, size, DateTime.UnixEpoch.AddSeconds(mtime), (FileAttributes)attrs, rootId);
         }
 
         return result;

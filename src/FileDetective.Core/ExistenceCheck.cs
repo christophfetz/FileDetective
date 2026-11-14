@@ -34,16 +34,16 @@ public sealed class FileSystemPathProbe : IPathProbe
 /// </summary>
 public static class ExistenceCheck
 {
-    public static ExistenceResult Evaluate(string path, IReadOnlyList<string> rootPaths, IPathProbe probe)
+    /// <param name="isUnreachable">
+    /// Stage 6: the known reachability of a location (<see cref="ReachabilityMonitor.IsUnreachable"/>). A location known
+    /// as unreachable is not probed at all (that could hang) and its entries are never reported as vanished.
+    /// </param>
+    public static ExistenceResult Evaluate(
+        string path, IReadOnlyList<string> rootPaths, IPathProbe probe, Func<string, bool>? isUnreachable = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(rootPaths);
         ArgumentNullException.ThrowIfNull(probe);
-
-        if (probe.Exists(path))
-        {
-            return ExistenceResult.Exists;
-        }
 
         string? root = null;
         foreach (var candidate in rootPaths)
@@ -55,6 +55,16 @@ public static class ExistenceCheck
             {
                 root = candidate;
             }
+        }
+
+        if (root is not null && isUnreachable is not null && isUnreachable(root))
+        {
+            return ExistenceResult.Unknown;
+        }
+
+        if (probe.Exists(path))
+        {
+            return ExistenceResult.Exists;
         }
 
         string? parent = Path.GetDirectoryName(path);
