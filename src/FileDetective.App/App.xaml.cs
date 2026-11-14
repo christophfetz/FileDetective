@@ -145,6 +145,7 @@ public partial class App : System.Windows.Application
 
         _index.Start();
         _updates.Start();
+        _ = EnsureStartMenuLocationsAsync(); // existing installations: once, at the next start
 
         if (hotkeyError is not null)
         {
@@ -163,6 +164,50 @@ public partial class App : System.Windows.Application
         if (!autostart)
         {
             ShowSearch();
+        }
+    }
+
+    // ---------------------------------------------------------------- Start menu (PLAN.md 7.3)
+
+    private int _startMenuCheckRunning;
+
+    /// <summary>
+    /// Once after the first-run set-up: every Start menu folder that no location contains becomes a location of its own.
+    /// Afterwards <see cref="AppSettings.StartMenuChecked"/> is set, so a removed Start menu location stays removed.
+    /// </summary>
+    private async Task EnsureStartMenuLocationsAsync()
+    {
+        if (_settings is not { Current: { FirstRunCompleted: true, StartMenuChecked: false } } settings
+            || _index is not { } index
+            || Interlocked.Exchange(ref _startMenuCheckRunning, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            await index.LoadedTask;
+            await Task.Run(() =>
+            {
+                foreach (string path in StartMenuLocations.Missing(index.GetRoots(), System.IO.Directory.Exists))
+                {
+                    var candidate = new LocationCandidate(path, null, RootKind.Local);
+                    if (LocationRules.Check(candidate, index.GetRoots()).Result == LocationCheckResult.Free)
+                    {
+                        index.AddLocation(candidate);
+                    }
+                }
+            });
+            settings.Update(s => s with { StartMenuChecked = true });
+        }
+        catch (Exception ex)
+        {
+            // Tried again at the next start.
+            FileLog.Shared.Error("Adding the Start menu locations failed", ex);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _startMenuCheckRunning, 0);
         }
     }
 
@@ -316,6 +361,7 @@ public partial class App : System.Windows.Application
             _firstRun = null;
             if (window.Completed)
             {
+                _ = EnsureStartMenuLocationsAsync();
                 _bar?.ShowBar();
             }
         };

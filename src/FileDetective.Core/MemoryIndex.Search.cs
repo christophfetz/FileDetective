@@ -137,7 +137,25 @@ public sealed partial class MemoryIndex
 
     /// <summary>Ranking key of one match (PLAN.md 6.4, "Rangfolge").</summary>
     internal readonly record struct RankKey(
-        int Id, byte Level, byte Quality, bool Opened, long OpenedAt, uint MTime, uint NameOffset, ushort NameLength);
+        int Id, byte Level, byte Quality, bool Program, bool Opened, long OpenedAt, uint MTime, uint NameOffset, ushort NameLength);
+
+    /// <summary>Endings of programs and shortcuts, in search form (PLAN.md 6.4, criterion 2a).</summary>
+    private static readonly byte[][] ProgramEndings =
+        [".lnk"u8.ToArray(), ".exe"u8.ToArray(), ".appref-ms"u8.ToArray(), ".url"u8.ToArray()];
+
+    /// <summary>True if a file name (search form) ends like a program or a shortcut.</summary>
+    internal static bool IsProgramName(ReadOnlySpan<byte> name)
+    {
+        foreach (var ending in ProgramEndings)
+        {
+            if (name.Length > ending.Length && name.EndsWith(ending))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>Orders better matches first. Total order: the entry id decides the last tie.</summary>
     internal sealed class RankComparer(byte[][] segments) : IComparer<RankKey>
@@ -154,6 +172,12 @@ public sealed partial class MemoryIndex
             if (a.Quality != b.Quality)
             {
                 return b.Quality.CompareTo(a.Quality);
+            }
+
+            // 2a. Programs and shortcuts before everything else.
+            if (a.Program != b.Program)
+            {
+                return a.Program ? -1 : 1;
             }
 
             // 3. Opened through the tool before not opened, then most recent opening first.
@@ -479,7 +503,8 @@ public sealed partial class MemoryIndex
                 byte level = own == _fullMask ? (byte)2 : own != 0 ? (byte)1 : (byte)0;
                 byte quality = level == 2 ? Quality(name, isDir) : (byte)0;
                 bool opened = _usage.TryGetLastOpened(id, out long openedAt);
-                local.Best.Offer(new RankKey(id, level, quality, opened, opened ? openedAt : 0, r.MTime, r.NameOffset, r.NameLength));
+                bool program = !isDir && IsProgramName(name);
+                local.Best.Offer(new RankKey(id, level, quality, program, opened, opened ? openedAt : 0, r.MTime, r.NameOffset, r.NameLength));
             }
         }
 

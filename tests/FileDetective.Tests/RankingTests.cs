@@ -65,6 +65,47 @@ public class RankingTests
     }
 
     [Fact]
+    public void Criterion2a_ProgramsFirst()
+    {
+        using var t = new TestTree();
+        t.Root(1, @"C:\r");
+        t.Dir(2, 1, "x");
+        t.File(10, 1, "CLAUDE.md", mtime: 99);  // opened and newest, but no program
+        t.File(11, 1, "Claude.lnk", mtime: 1);
+        t.File(12, 2, "claude.exe", mtime: 2);
+        t.File(13, 1, "claude.url", mtime: 3);
+        t.File(14, 1, "claude.appref-ms", mtime: 4);
+        t.Dir(15, 1, "claude", mtime: 98);       // a folder is no program
+        var usage = new DictionaryUsage(new() { [10] = 100, [15] = 90 });
+
+        var hits = t.Search("claude", SearchMode.All, usage).Hits;
+        Assert.Equal([14, 13, 12, 11, 10, 15], hits.Select(h => h.EntryId));
+        Assert.All(hits, h => Assert.Equal(3, h.NameQuality));
+    }
+
+    [Fact]
+    public void Criterion2a_DoesNotBeatBetterNameQuality()
+    {
+        using var t = new TestTree();
+        t.Root(1, @"C:\r");
+        t.File(10, 1, "claude.md", mtime: 1);           // quality 3
+        t.File(11, 1, "claude setup.exe", mtime: 99);   // quality 2, program
+        Assert.Equal([10, 11], t.Search("claude", SearchMode.Files).Hits.Select(h => h.EntryId));
+    }
+
+    [Theory]
+    [InlineData("a.lnk", true)]
+    [InlineData("a.exe", true)]
+    [InlineData("a.appref-ms", true)]
+    [InlineData("a.url", true)]
+    [InlineData("a.exe.txt", false)]
+    [InlineData("readme.md", false)]
+    [InlineData(".exe", false)]
+    [InlineData("xexe", false)]
+    public void ProgramName_IsDecidedByTheEnding(string name, bool expected)
+        => Assert.Equal(expected, MemoryIndex.IsProgramName(SearchNormalizer.Normalize(name)));
+
+    [Fact]
     public void Criterion3_OpenedThroughTool()
     {
         using var t = new TestTree();

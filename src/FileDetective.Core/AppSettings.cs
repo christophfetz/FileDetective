@@ -59,6 +59,13 @@ public sealed record AppSettings
     [JsonPropertyName("firstRunCompleted")]
     public bool FirstRunCompleted { get; init; }
 
+    /// <summary>
+    /// True once the Start menu folders were checked and, where no location contained them, added as locations
+    /// (PLAN.md 7.3). Happens only once, so a Start menu location the user removed stays removed.
+    /// </summary>
+    [JsonPropertyName("startMenuChecked")]
+    public bool StartMenuChecked { get; init; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; init; }
 
@@ -98,7 +105,8 @@ public sealed record AppSettings
     };
 
     /// <summary>The exclusion rules these settings describe; applied at the next scan.</summary>
-    public ExcludeRules CreateExcludeRules() => new(ExcludedFolderNames, ExcludedPaths, ExcludedFileNames);
+    public ExcludeRules CreateExcludeRules()
+        => new(ExcludedFolderNames, ExcludedPaths, ExcludedFileNames, includedPaths: ExcludeRules.AlwaysIncludedPaths);
 
     /// <summary>
     /// Replaces invalid values by defaults (unknown hotkey, language or politeness; missing lists) and removes blank

@@ -218,6 +218,7 @@ Der Teilwort-Vergleich ist `ReadOnlySpan<byte>.IndexOf`, das .NET vektorisiert a
 
 1. Namensstufe: 2 = alle Begriffe stehen im eigenen Namen, 1 = mindestens einer, 0 = nur im Pfad.
 2. Namensgüte, nur bei Stufe 2: 3 = Name (ohne Endung) ist genau die Eingabe, 2 = Name beginnt mit dem ersten Begriff, 1 = ein Begriff beginnt an einer Wortgrenze, 0 = sonst.
+2a. Programme zuerst: Dateien mit der Endung `.lnk`, `.exe`, `.appref-ms` oder `.url` vor allen anderen Einträgen. Nachgetragen am 2026-11-14 nach Rückmeldung des Nutzers: Wer „claude“ sucht, will das Programm, nicht die vielen `CLAUDE.md`.
 3. Über das Tool geöffnet: ja vor nein, dann jüngstes Öffnen zuerst.
 4. Änderungsdatum, neuestes zuerst.
 5. Kürzerer Name zuerst, dann alphabetisch.
@@ -287,6 +288,10 @@ Es läuft immer nur ein Durchlauf gleichzeitig. Lokale Orte kommen in der Wartes
 | Attribut | Einträge mit dem Attribut `System` |
 
 Versteckte Dateien ohne Systemattribut werden aufgenommen.
+
+**Startmenü** (nachgetragen am 2026-11-14 nach Rückmeldung des Nutzers): Die beiden Startmenü-Ordner `%APPDATA%\Microsoft\Windows\Start Menu` und `%ProgramData%\Microsoft\Windows\Start Menu` werden immer aufgenommen, obwohl sie unter ausgeschlossenen Pfaden liegen. Sonst findet das Programm keine installierten Programme.
+- Liegt ein Startmenü-Ordner in einem Ort, gilt für ihn und für jeden Ordner auf dem Weg dorthin keine Ausschlussregel, auch nicht das Systemattribut (`C:\ProgramData\Microsoft` trägt es). Alles andere unter einem sonst ausgeschlossenen Ordner bleibt ausgeschlossen: Aus `AppData` kommen nur `Roaming\Microsoft\Windows\Start Menu` und die Ordner auf dem Weg dorthin ins Verzeichnis. Im Startmenü selbst gelten die Regeln wie überall (`desktop.ini` bleibt draußen).
+- Liegt ein Startmenü-Ordner in keinem Ort, wird er einmalig nach der Ersteinrichtung (bei bestehenden Installationen beim nächsten Start) als eigener lokaler Ort hinzugefügt. Entfernt der Nutzer ihn in den Einstellungen, bleibt er entfernt.
 
 ### 7.4 Schonung der Freigaben
 

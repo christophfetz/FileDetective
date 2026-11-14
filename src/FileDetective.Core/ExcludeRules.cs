@@ -39,6 +39,15 @@ public sealed class ExcludeRules
         "~$*", "Thumbs.db", "desktop.ini", "*.tmp",
     ];
 
+    /// <summary>
+    /// Paths that are always recorded, even below excluded paths (PLAN.md 7.3, "Startmenü"): the two Start menu folders,
+    /// so installed programs can be found.
+    /// </summary>
+    public static readonly IReadOnlyList<string> AlwaysIncludedPaths =
+    [
+        @"%APPDATA%\Microsoft\Windows\Start Menu", @"%ProgramData%\Microsoft\Windows\Start Menu",
+    ];
+
     private static readonly char[] Separators = ['\\', '/'];
 
     private readonly HashSet<string> _folderNames;
@@ -46,17 +55,32 @@ public sealed class ExcludeRules
     private readonly PathRule[] _pathRules;
     private readonly HashSet<int> _pathRuleDepths;
 
+    /// <summary>The always-included paths (expanded, without trailing separator).</summary>
+    private readonly HashSet<string> _included = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Every folder strictly above an always-included path, mapped to "tainted": true if the folder itself or one above
+    /// it would be excluded by a name or path rule. Children of a tainted folder that are not on the way to an
+    /// always-included path stay excluded.
+    /// </summary>
+    private readonly Dictionary<string, bool> _chain = new(StringComparer.OrdinalIgnoreCase);
+
     /// <param name="folderNames">Folder names skipped anywhere.</param>
     /// <param name="paths">Full paths with environment variables and <c>*</c> per path part.</param>
     /// <param name="fileNamePatterns">File name patterns with <c>*</c>.</param>
     /// <param name="excludeSystem">Skip entries with the System attribute (always true in the program; switchable for tests).</param>
     /// <param name="expandEnvironmentVariables">Expands <c>%NAME%</c>; default <see cref="Environment.ExpandEnvironmentVariables"/>.</param>
+    /// <param name="includedPaths">
+    /// Paths recorded even below excluded paths; null means none. Such a path and every folder on the way to it are never
+    /// excluded (not even by the System attribute); inside it the normal rules apply.
+    /// </param>
     public ExcludeRules(
         IEnumerable<string> folderNames,
         IEnumerable<string> paths,
         IEnumerable<string> fileNamePatterns,
         bool excludeSystem = true,
-        Func<string, string>? expandEnvironmentVariables = null)
+        Func<string, string>? expandEnvironmentVariables = null,
+        IEnumerable<string>? includedPaths = null)
     {
         ArgumentNullException.ThrowIfNull(folderNames);
         ArgumentNullException.ThrowIfNull(paths);
@@ -69,10 +93,50 @@ public sealed class ExcludeRules
         _pathRules = [.. paths.Select(p => PathRule.TryCreate(p, expand)).OfType<PathRule>()];
         _pathRuleDepths = [.. _pathRules.Select(r => r.Parts.Length)];
         ExcludeSystem = excludeSystem;
+        BuildChains(includedPaths ?? [], expand);
     }
 
-    /// <summary>Rules with the default lists of PLAN.md 7.3.</summary>
-    public static ExcludeRules CreateDefault() => new(DefaultFolderNames, DefaultPaths, DefaultFileNames);
+    /// <summary>Rules with the default lists of PLAN.md 7.3, including the Start menu folders.</summary>
+    public static ExcludeRules CreateDefault()
+        => new(DefaultFolderNames, DefaultPaths, DefaultFileNames, includedPaths: AlwaysIncludedPaths);
+
+    private void BuildChains(IEnumerable<string> includedPaths, Func<string, string> expand)
+    {
+        foreach (string raw in includedPaths)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                continue;
+            }
+
+            string expanded = expand(raw.Trim()).Trim();
+            int first = expanded.IndexOf('%', StringComparison.Ordinal);
+            if (first >= 0 && expanded.IndexOf('%', first + 1) > first)
+            {
+                continue; // variable not set: ignored like a path rule
+            }
+
+            bool unc = expanded.StartsWith(@"\\", StringComparison.Ordinal) || expanded.StartsWith("//", StringComparison.Ordinal);
+            string[] parts = expanded.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2)
+            {
+                continue;
+            }
+
+            string prefix = unc ? @"\\" : string.Empty;
+            string current = prefix + parts[0];
+            bool tainted = false;
+            for (int i = 1; i < parts.Length; i++)
+            {
+                // "current" is a strict ancestor of the included path; parts[i] is its child on the way down.
+                _chain[current] = _chain.TryGetValue(current, out bool known) ? known || tainted : tainted;
+                tainted |= _folderNames.Contains(parts[i]) || (_pathRules.Length > 0 && MatchesPathRule(current, parts[i]));
+                current = current + '\\' + parts[i];
+            }
+
+            _included.Add(current);
+        }
+    }
 
     /// <summary>Rules that skip nothing (for tests and the later storage analysis).</summary>
     public static ExcludeRules None { get; } = new([], [], [], excludeSystem: false);
@@ -88,6 +152,22 @@ public sealed class ExcludeRules
     {
         ArgumentNullException.ThrowIfNull(parentPath);
         ArgumentNullException.ThrowIfNull(name);
+
+        // On the way to an always-included path: that way is kept, everything beside it below an excluded folder is not.
+        if (_chain.Count > 0 && _chain.TryGetValue(TrimEnd(parentPath), out bool tainted))
+        {
+            string full = TrimEnd(parentPath) + '\\' + name;
+            if (isDirectory && (_chain.ContainsKey(full) || _included.Contains(full)))
+            {
+                return false;
+            }
+
+            if (tainted)
+            {
+                return true;
+            }
+        }
+
         if (ExcludeSystem && (attributes & FileAttributes.System) != 0)
         {
             return true;
@@ -147,6 +227,9 @@ public sealed class ExcludeRules
 
         return false;
     }
+
+    /// <summary>Path without trailing separators (<c>C:\</c> becomes <c>C:</c>); returns the same string if there are none.</summary>
+    private static string TrimEnd(string path) => path.TrimEnd(Separators);
 
     private static int CountParts(string path)
     {
