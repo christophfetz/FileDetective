@@ -6,6 +6,7 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\FileDetective.ico</ApplicationIcon>
     <NeutralLanguage>en</NeutralLanguage>
     <RootNamespace>FileDetective.App</RootNamespace>
   </PropertyGroup>
@@ -16,6 +17,11 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Also embedded as a WPF resource: the tray icon is loaded from it in the size the system asks for. -->
+    <Resource Include="Assets\FileDetective.ico" />
   </ItemGroup>
 
 </Project>

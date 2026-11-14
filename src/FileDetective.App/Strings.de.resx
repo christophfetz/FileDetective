@@ -137,4 +137,13 @@ Sie werden durch {0} ersetzt. Fortfahren?</value></data>
   <data name="Footer_NotConnected" xml:space="preserve"><value>Dieser Ort ist nicht verbunden. Nur „Pfad kopieren“ (Strg+C) ist möglich.</value></data>
   <data name="Hit_NotConnected" xml:space="preserve"><value>nicht verbunden</value></data>
   <data name="Status_NotConnected" xml:space="preserve"><value>Nicht verbunden</value></data>
+  <data name="Footer_Recent" xml:space="preserve"><value>{0:N0} zuletzt geöffnet · Enter öffnen · Strg+Enter Ordner · Esc schließen</value></data>
+  <data name="Error_Unhandled" xml:space="preserve"><value>Es ist ein unerwarteter Fehler aufgetreten: {0} FileDetective läuft weiter. Einzelheiten stehen im Protokoll im Datenordner.</value></data>
+  <data name="Gen_Rebuild" xml:space="preserve"><value>Verzeichnis</value></data>
+  <data name="Button_Rebuild" xml:space="preserve"><value>Verzeichnis neu aufbauen…</value></data>
+  <data name="Gen_RebuildHint" xml:space="preserve"><value>Löscht alle Einträge aller Orte und liest sie neu ein. Die Orte und die Liste der zuletzt geöffneten Elemente bleiben erhalten. Hilfreich, wenn Treffer falsch erscheinen oder fehlen.</value></data>
+  <data name="Confirm_Rebuild" xml:space="preserve"><value>Verzeichnis neu aufbauen? Alle Einträge aller Orte werden aus dem Index gelöscht und von Grund auf neu gelesen. Bis das fertig ist, findet die Suche weniger, und Netzwerkfreigaben werden langsam und mit Pausen gelesen. Ihre Dateien werden nicht angetastet. Die Orte und die Liste der zuletzt geöffneten Elemente bleiben erhalten.</value></data>
+  <data name="Msg_Rebuilding" xml:space="preserve"><value>Verzeichnis wird neu aufgebaut…</value></data>
+  <data name="Msg_Rebuilt" xml:space="preserve"><value>Das Verzeichnis wurde geleert ({0:N0} Einträge entfernt). Alle Orte werden im Hintergrund neu gelesen.</value></data>
+  <data name="Msg_RebuildFailed" xml:space="preserve"><value>Das Verzeichnis konnte nicht neu aufgebaut werden, das alte bleibt erhalten: {0}</value></data>
 </root>

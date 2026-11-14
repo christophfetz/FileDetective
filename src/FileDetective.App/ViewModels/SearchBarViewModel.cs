@@ -26,6 +26,10 @@ internal sealed partial class SearchBarViewModel : ObservableObject
     private bool _queryEmpty = true;
     private string? _transientMessage;
     private bool _busy;
+    private bool _recentApplied;
+
+    /// <summary>The parsed input of each request still on its way (UI thread only), to highlight with the right terms.</summary>
+    private readonly Dictionary<long, SearchQuery> _requested = [];
 
     [ObservableProperty]
     private string _input = string.Empty;
@@ -49,7 +53,7 @@ internal sealed partial class SearchBarViewModel : ObservableObject
         _coordinator = new SearchCoordinator(
             RunSearch,
             (generation, result) => _dispatcher.BeginInvoke(new Action(() => Apply(generation, result))),
-            ex => DiagnosticLog.Error("Search failed", ex));
+            ex => FileLog.Shared.Error("Search failed", ex));
         _index.StateChanged += () => _dispatcher.BeginInvoke(new Action(OnIndexStateChanged));
         FooterText = BuildFooter();
     }
@@ -163,10 +167,13 @@ internal sealed partial class SearchBarViewModel : ObservableObject
     {
         var query = SearchQuery.Parse(Input, Mode);
         _queryEmpty = query.IsEmpty;
-        if (_queryEmpty)
+
+        // PLAN.md 6.4: an empty input shows the entries opened last through the tool (stage 7). Nothing to show before
+        // the directory is loaded; the footer says so, and the list fills when loading is done (OnIndexStateChanged).
+        if (_queryEmpty && !_index.IsLoaded)
         {
-            // Nothing to search: respond at once. (Recently opened entries for an empty input come in stage 7.)
             _coordinator.CancelPending();
+            _requested.Clear();
             _total = 0;
             Hits = [];
             SelectedIndex = -1;
@@ -174,12 +181,23 @@ internal sealed partial class SearchBarViewModel : ObservableObject
             return;
         }
 
-        _coordinator.Request(Input, Mode);
+        long generation = _coordinator.Request(Input, Mode);
+        _requested[generation] = query; // Apply highlights with the query of this very request
         RefreshFooter();
     }
 
     private SearchResult RunSearch(string input, SearchMode mode, CancellationToken token)
-        => _index.Engine?.Search(input, mode, token) ?? SearchResult.Empty;
+    {
+        var engine = _index.Engine;
+        if (engine is null)
+        {
+            return SearchResult.Empty;
+        }
+
+        return SearchQuery.Parse(input, mode).IsEmpty
+            ? engine.RecentlyOpened(mode, SearchEngine.MaxResults, token)
+            : engine.Search(input, mode, token);
+    }
 
     private void Apply(long generation, SearchResult result)
     {
@@ -189,16 +207,28 @@ internal sealed partial class SearchBarViewModel : ObservableObject
         }
 
         _appliedGeneration = generation;
-        if (_queryEmpty)
+        if (!_requested.TryGetValue(generation, out var query))
         {
-            return; // the input was cleared while this search was on its way
+            return;
+        }
+
+        foreach (long old in _requested.Keys.Where(g => g <= generation).ToList())
+        {
+            _requested.Remove(old);
+        }
+
+        if (query.IsEmpty != _queryEmpty)
+        {
+            return; // the input changed while this search was on its way; the newer request delivers
         }
 
         var items = new List<HitItem>(result.Hits.Count);
         foreach (var hit in result.Hits)
         {
-            items.Add(HitItem.From(hit, _index.IsLocationUnreachable(hit.Details.RootId)));
+            items.Add(HitItem.From(hit, _index.IsLocationUnreachable(hit.Details.RootId), query.IsEmpty ? null : query));
         }
+
+        _recentApplied = _queryEmpty;
 
         // Keep the selected entry when the list is refreshed for the same input (e.g. while the first scan runs).
         int keep = -1;
@@ -215,7 +245,9 @@ internal sealed partial class SearchBarViewModel : ObservableObject
 
     private void OnIndexStateChanged()
     {
-        if (!_queryEmpty)
+        // With input the list follows the directory. With an empty input the recently opened list is built once after
+        // loading and again each time the bar is shown, not on every scan or watcher event.
+        if (!_queryEmpty || (_index.IsLoaded && !_recentApplied))
         {
             StartSearch();
         }
@@ -271,7 +303,7 @@ internal sealed partial class SearchBarViewModel : ObservableObject
                             }
                             catch (Exception ex)
                             {
-                                DiagnosticLog.Error("Recording the opening failed", ex);
+                                FileLog.Shared.Error("Recording the opening failed", ex);
                             }
                         });
                     }
@@ -293,7 +325,7 @@ internal sealed partial class SearchBarViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Error("Opening failed", ex);
+            FileLog.Shared.Error("Opening failed", ex);
             SetTransient(string.Format(CultureInfo.CurrentCulture, Strings.Get("Footer_OpenFailed"), ex.Message));
         }
         finally
@@ -335,6 +367,11 @@ internal sealed partial class SearchBarViewModel : ObservableObject
             if (scanPath is not null)
             {
                 return string.Format(culture, Strings.Get("Footer_IdleScanning"), scanPath, scan!.Value.Entries);
+            }
+
+            if (Hits.Count > 0)
+            {
+                return string.Format(culture, Strings.Get("Footer_Recent"), Hits.Count);
             }
 
             return _index.LastCompleted is { } completed

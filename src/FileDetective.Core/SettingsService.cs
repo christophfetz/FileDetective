@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -82,7 +83,13 @@ public sealed class SettingsService
 
             try
             {
-                byte[] bytes = File.ReadAllBytes(FilePath);
+                // Editors such as Notepad write a UTF-8 byte order mark; the JSON reader refuses it, so it is skipped.
+                ReadOnlySpan<byte> bytes = File.ReadAllBytes(FilePath);
+                if (bytes.StartsWith(Encoding.UTF8.Preamble))
+                {
+                    bytes = bytes[Encoding.UTF8.Preamble.Length..];
+                }
+
                 var parsed = JsonSerializer.Deserialize<AppSettings>(bytes, Options)
                     ?? throw new JsonException("The file contains null.");
                 if (parsed.SchemaVersion < 1)

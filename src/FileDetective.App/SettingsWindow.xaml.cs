@@ -25,7 +25,7 @@ internal enum SettingsSection
 
 /// <summary>
 /// Settings window with the areas Locations, Exclusions, General and About (PLAN.md 8.5). Changes are saved as soon as
-/// they are made; there is no OK button. "Rebuild directory" is not here, it belongs to stage 7.
+/// they are made; there is no OK button. "Rebuild directory" (stage 7) is in General.
 /// </summary>
 public partial class SettingsWindow : Window
 {
@@ -150,6 +150,9 @@ public partial class SettingsWindow : Window
         PolitenessBox.Items.Add(Strings.Get("Polite_Normal"));
         PolitenessBox.Items.Add(Strings.Get("Polite_VeryGentle"));
         PolitenessHint.Text = Strings.Get("Gen_PolitenessHint");
+        RebuildLabel.Text = Strings.Get("Gen_Rebuild");
+        RebuildButton.Content = Strings.Get("Button_Rebuild");
+        RebuildHint.Text = Strings.Get("Gen_RebuildHint");
 
         AboutHeading.Text = Strings.Get("Section_About");
         string version = Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
@@ -210,7 +213,7 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Error("Reading the autostart entry failed", ex);
+            FileLog.Shared.Error("Reading the autostart entry failed", ex);
             return false;
         }
     }
@@ -295,7 +298,7 @@ public partial class SettingsWindow : Window
                 }
                 catch (Exception ex)
                 {
-                    DiagnosticLog.Error("Counting the entries failed", ex);
+                    FileLog.Shared.Error("Counting the entries failed", ex);
                 }
 
                 byte? selected = (LocationList.SelectedItem as LocationItem)?.Id;
@@ -379,7 +382,7 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Error("Adding a location failed", ex);
+            FileLog.Shared.Error("Adding a location failed", ex);
             ShowLocationsMessage(LocationUi.Format("Msg_AddFailed", ex.Message), true);
         }
         finally
@@ -417,7 +420,7 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Error("Removing a location failed", ex);
+            FileLog.Shared.Error("Removing a location failed", ex);
             ShowLocationsMessage(LocationUi.Format("Msg_RemoveFailed", ex.Message), true);
         }
         finally
@@ -459,7 +462,7 @@ public partial class SettingsWindow : Window
             }
             catch (Exception ex)
             {
-                DiagnosticLog.Error("Saving the settings failed", ex);
+                FileLog.Shared.Error("Saving the settings failed", ex);
             }
 
             LoadControls();
@@ -498,7 +501,7 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Error("Saving the settings failed", ex);
+            FileLog.Shared.Error("Saving the settings failed", ex);
         }
     }
 
@@ -544,6 +547,8 @@ public partial class SettingsWindow : Window
             }
         };
 
+        RebuildButton.Click += async (_, _) => await RebuildAsync();
+
         OpenDataButton.Click += (_, _) =>
         {
             try
@@ -552,9 +557,53 @@ public partial class SettingsWindow : Window
             }
             catch (Exception ex)
             {
-                DiagnosticLog.Error("Opening the data folder failed", ex);
+                FileLog.Shared.Error("Opening the data folder failed", ex);
             }
         };
+    }
+
+    /// <summary>"Rebuild directory" (PLAN.md 8.5): asks first, then runs in the background and shows the outcome.</summary>
+    private async Task RebuildAsync()
+    {
+        if (_busy || !_services.Index.IsLoaded)
+        {
+            return;
+        }
+
+        var answer = MessageBox.Show(
+            this, Strings.Get("Confirm_Rebuild"), Strings.Get("Settings_Title"),
+            MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        SetBusy(true);
+        RebuildButton.IsEnabled = false;
+        ShowRebuildMessage(Strings.Get("Msg_Rebuilding"), false);
+        try
+        {
+            int removed = await Task.Run(_services.Index.RebuildDirectory);
+            ShowRebuildMessage(LocationUi.Format("Msg_Rebuilt", removed), false);
+        }
+        catch (Exception ex)
+        {
+            FileLog.Shared.Error("Rebuilding the directory failed", ex);
+            ShowRebuildMessage(LocationUi.Format("Msg_RebuildFailed", ex.Message), true);
+        }
+        finally
+        {
+            RebuildButton.IsEnabled = true;
+            SetBusy(false);
+            QueueRefresh();
+        }
+    }
+
+    private void ShowRebuildMessage(string text, bool warning)
+    {
+        RebuildMessage.Text = text;
+        RebuildMessage.Foreground = warning ? (Brush)FindResource("WarnBrush") : (Brush)FindResource("MutedBrush");
+        RebuildMessage.Visibility = Visibility.Visible;
     }
 
     private void SaveSettings(Func<AppSettings, AppSettings> change)
@@ -565,7 +614,7 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Error("Saving the settings failed", ex);
+            FileLog.Shared.Error("Saving the settings failed", ex);
             MessageBox.Show(
                 this, LocationUi.Format("Msg_SaveFailed", ex.Message), Strings.Get("Settings_Title"),
                 MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -611,7 +660,7 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Error("Changing the autostart failed", ex);
+            FileLog.Shared.Error("Changing the autostart failed", ex);
             AutostartMessage.Text = LocationUi.Format("Msg_AutostartFailed", ex.Message);
             AutostartMessage.Visibility = Visibility.Visible;
         }

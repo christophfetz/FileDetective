@@ -16,7 +16,7 @@ namespace FileDetective.Core;
 /// call <see cref="Reload"/> after a scan or a rename/move to refresh the map. After a delete the old entry number
 /// is never reused, so a stale map entry cannot match a wrong entry.
 /// </remarks>
-public sealed class UsageTracker : IUsageLookup
+public sealed class UsageTracker : IRecentUsage
 {
     private readonly IndexDatabase _database;
     private readonly IndexStore _store;
@@ -101,6 +101,25 @@ public sealed class UsageTracker : IUsageLookup
 
             _byEntry = map; // atomic swap; running searches keep the old, still consistent map
         }
+    }
+
+    /// <summary>
+    /// The entries opened most recently, newest first (same time: higher entry number first, so the order is stable).
+    /// Works on the map, so it never touches the database; entries that vanished since the last <see cref="Reload"/>
+    /// are still in it, the caller drops what it cannot resolve.
+    /// </summary>
+    public IReadOnlyList<int> GetMostRecent(int count)
+    {
+        if (count <= 0)
+        {
+            return [];
+        }
+
+        return [.. _byEntry
+            .OrderByDescending(kv => kv.Value)
+            .ThenByDescending(kv => kv.Key)
+            .Take(count)
+            .Select(kv => kv.Key)];
     }
 
     public bool TryGetLastOpened(int entryId, out long lastOpenedUnixSeconds)

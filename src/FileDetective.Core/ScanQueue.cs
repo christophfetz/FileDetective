@@ -182,6 +182,54 @@ public sealed class ScanQueue : IDisposable
         return new Unblocker(this, rootId);
     }
 
+    /// <summary>
+    /// <see cref="CancelAndBlock(byte, TimeSpan?)"/> for several locations at once: all of them are blocked and their
+    /// queued requests dropped first, so that waiting for one running scan never lets the worker start the next waiting
+    /// location of the set (used when the whole directory is rebuilt).
+    /// </summary>
+    public IDisposable CancelAndBlock(IReadOnlyCollection<byte> rootIds, TimeSpan? timeout = null)
+    {
+        ArgumentNullException.ThrowIfNull(rootIds);
+        lock (_gate)
+        {
+            foreach (byte id in rootIds)
+            {
+                _blocked.Add(id);
+            }
+
+            _queue.RemoveAll(r => rootIds.Contains(r.RootId));
+            if (_rerun is { } rerun && rootIds.Contains(rerun.RootId))
+            {
+                _rerun = null;
+            }
+
+            if (_running is { } running && rootIds.Contains(running.RootId))
+            {
+                _runningCancel?.Cancel();
+            }
+
+            var deadline = DateTime.UtcNow + (timeout ?? Timeout.InfiniteTimeSpan);
+            while (_running is { } current && rootIds.Contains(current.RootId))
+            {
+                if (timeout is null)
+                {
+                    Monitor.Wait(_gate);
+                }
+                else
+                {
+                    var left = deadline - DateTime.UtcNow;
+                    if (left <= TimeSpan.Zero || !Monitor.Wait(_gate, left))
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
+        RaiseChanged();
+        return new MultiUnblocker([.. rootIds.Select(id => new Unblocker(this, id))]);
+    }
+
     /// <summary>Removes the queued request of a location and cancels its running scan without waiting.</summary>
     public void Cancel(byte rootId)
     {
@@ -357,6 +405,17 @@ public sealed class ScanQueue : IDisposable
         catch (Exception)
         {
             // Listeners must not break the queue.
+        }
+    }
+
+    private sealed class MultiUnblocker(Unblocker[] parts) : IDisposable
+    {
+        public void Dispose()
+        {
+            foreach (var part in parts)
+            {
+                part.Dispose();
+            }
         }
     }
 

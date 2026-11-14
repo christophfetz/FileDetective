@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using FileDetective.App.Interop;
 using FileDetective.App.ViewModels;
+using FileDetective.Core;
 
 namespace FileDetective.App;
 
@@ -100,7 +101,7 @@ public partial class SearchBarWindow : Window
         catch (Exception ex)
         {
             // Placement is cosmetic; the bar still has to appear.
-            DiagnosticLog.Error("Placing the search bar failed", ex);
+            FileLog.Shared.Error("Placing the search bar failed", ex);
         }
 
         _viewModel.OnShown();
@@ -113,7 +114,7 @@ public partial class SearchBarWindow : Window
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Error("Placing the search bar failed", ex);
+            FileLog.Shared.Error("Placing the search bar failed", ex);
         }
 
         // Windows often denies the foreground to a program that is not in front: Activate alone is not reliable.

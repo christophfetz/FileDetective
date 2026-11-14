@@ -198,6 +198,11 @@
             <TextBlock x:Name="PolitenessLabel" Style="{StaticResource LabelText}" />
             <ComboBox x:Name="PolitenessBox" HorizontalAlignment="Left" Width="320" />
             <TextBlock x:Name="PolitenessHint" Style="{StaticResource MutedText}" Margin="0,4,0,0" />
+
+            <TextBlock x:Name="RebuildLabel" Style="{StaticResource LabelText}" />
+            <Button x:Name="RebuildButton" HorizontalAlignment="Left" Margin="0" />
+            <TextBlock x:Name="RebuildHint" Style="{StaticResource MutedText}" Margin="0,4,0,0" />
+            <TextBlock x:Name="RebuildMessage" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed" />
           </StackPanel>
         </ScrollViewer>
 

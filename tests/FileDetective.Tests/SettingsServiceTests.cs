@@ -254,6 +254,47 @@ public class SettingsServiceTests : IDisposable
     }
 
     [Fact]
+    public void FileWithUtf8Bom_IsReadNormally_NotRenamed()
+    {
+        // Notepad and many editors save UTF-8 with a byte order mark.
+        string json = """{ "schemaVersion": 1, "hotkey": "Ctrl+Alt+K", "language": "de", "checkForUpdates": false, "firstRunCompleted": true }""";
+        File.WriteAllBytes(FilePath, [.. System.Text.Encoding.UTF8.GetPreamble(), .. System.Text.Encoding.UTF8.GetBytes(json)]);
+
+        var service = NewService();
+        Assert.Equal(SettingsLoadResult.Loaded, service.Load());
+
+        Assert.Null(service.BackupPath);
+        Assert.Equal("Ctrl+Alt+K", service.Current.Hotkey);
+        Assert.Equal(AppLanguage.German, service.Current.LanguageChoice);
+        Assert.False(service.Current.CheckForUpdates);
+        Assert.True(service.Current.FirstRunCompleted);
+        Assert.Empty(Directory.GetFiles(_dir.Path, "*.bak-*"));
+        Assert.True(File.Exists(FilePath));
+    }
+
+    [Fact]
+    public void FileWithBomIsWrittenBackWithoutBom_AfterASave()
+    {
+        File.WriteAllBytes(FilePath, [.. System.Text.Encoding.UTF8.GetPreamble(), .. "{ \"schemaVersion\": 1 }"u8.ToArray()]);
+        var service = NewService();
+        Assert.Equal(SettingsLoadResult.Loaded, service.Load());
+        service.Update(s => s with { CheckForUpdates = false });
+
+        byte[] bytes = File.ReadAllBytes(FilePath);
+        Assert.NotEqual(0xEF, bytes[0]);
+        Assert.Equal(SettingsLoadResult.Loaded, NewService().Load());
+    }
+
+    [Fact]
+    public void FileWithOnlyABom_IsStillTreatedAsDamaged()
+    {
+        File.WriteAllBytes(FilePath, System.Text.Encoding.UTF8.GetPreamble());
+        var service = NewService();
+        Assert.Equal(SettingsLoadResult.CorruptRenamed, service.Load());
+        Assert.NotNull(service.BackupPath);
+    }
+
+    [Fact]
     public void DefaultSettings_GiveTheDefaultRules_AndResetRestoresThem()
     {
         var custom = new AppSettings { ExcludedFolderNames = ["x"], ExcludedPaths = [], ExcludedFileNames = [] };

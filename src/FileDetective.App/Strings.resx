@@ -137,4 +137,13 @@ They are replaced by {0}. Continue?</value></data>
   <data name="Footer_NotConnected" xml:space="preserve"><value>This location is not connected. Only Copy path (Ctrl+C) is possible.</value></data>
   <data name="Hit_NotConnected" xml:space="preserve"><value>not connected</value></data>
   <data name="Status_NotConnected" xml:space="preserve"><value>Not connected</value></data>
+  <data name="Footer_Recent" xml:space="preserve"><value>{0:N0} recently opened · Enter open · Ctrl+Enter folder · Esc close</value></data>
+  <data name="Error_Unhandled" xml:space="preserve"><value>An unexpected error occurred: {0} FileDetective keeps running. Details are in the log in the data folder.</value></data>
+  <data name="Gen_Rebuild" xml:space="preserve"><value>Directory</value></data>
+  <data name="Button_Rebuild" xml:space="preserve"><value>Rebuild directory…</value></data>
+  <data name="Gen_RebuildHint" xml:space="preserve"><value>Deletes all entries of all locations and reads them again. The locations and the list of recently opened items stay. Use it if hits seem wrong or missing.</value></data>
+  <data name="Confirm_Rebuild" xml:space="preserve"><value>Rebuild the directory? All entries of all locations are deleted from the index and read again from the start. Search finds less until this is done, and network shares are read slowly with pauses. Your files are not touched. The locations and the list of recently opened items stay.</value></data>
+  <data name="Msg_Rebuilding" xml:space="preserve"><value>Rebuilding the directory…</value></data>
+  <data name="Msg_Rebuilt" xml:space="preserve"><value>The directory was emptied ({0:N0} entries removed). All locations are read again in the background.</value></data>
+  <data name="Msg_RebuildFailed" xml:space="preserve"><value>The directory could not be rebuilt, the old one is kept: {0}</value></data>
 </root>

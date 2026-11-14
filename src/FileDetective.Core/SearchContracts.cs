@@ -11,6 +11,15 @@ public interface IUsageLookup
     bool TryGetLastOpened(int entryId, out long lastOpenedUnixSeconds);
 }
 
+/// <summary>
+/// A usage lookup that can also list the entries opened most recently (stage 7: empty input shows them, PLAN.md 6.4).
+/// </summary>
+public interface IRecentUsage : IUsageLookup
+{
+    /// <summary>Entry numbers of up to <paramref name="count"/> entries opened through the tool, newest opening first.</summary>
+    IReadOnlyList<int> GetMostRecent(int count);
+}
+
 /// <summary>Usage lookup without any data: nothing was ever opened.</summary>
 public sealed class NoUsage : IUsageLookup
 {

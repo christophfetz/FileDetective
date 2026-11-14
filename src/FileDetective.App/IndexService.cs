@@ -45,10 +45,10 @@ internal sealed class IndexService : IDisposable
         _settings = settings;
         _queue = new ScanQueue(RunScan);
         _queue.Changed += RaiseStateChanged;
-        _queue.Failed += (request, ex) => DiagnosticLog.Error($"Scan of location {request.RootId} failed", ex);
+        _queue.Failed += (request, ex) => FileLog.Shared.Error($"Scan of location {request.RootId} failed", ex);
         _reachability.Changed += RaiseStateChanged;
         _usageReload = new Debouncer(UsageReloadDelay, ReloadUsage);
-        _usageReload.Failed += ex => DiagnosticLog.Error("Reloading the usage map failed", ex);
+        _usageReload.Failed += ex => FileLog.Shared.Error("Reloading the usage map failed", ex);
     }
 
     /// <summary>Raised whenever loading, scanning, the watcher or the reachability changed the state.</summary>
@@ -107,8 +107,12 @@ internal sealed class IndexService : IDisposable
             _database = database;
             if (database.BackupPath is not null)
             {
-                DiagnosticLog.Info($"The previous database was unusable and moved to {database.BackupPath}.");
+                FileLog.Shared.Info($"The previous database was unusable and moved to {database.BackupPath}.");
             }
+
+            // PLAN.md 6.3: if the entry numbers have become sparse, compact them now, before anything is loaded into
+            // memory. A failure only means that the old numbers stay (the transaction is rolled back).
+            RenumberIfNeeded(database);
 
             var index = new MemoryIndex();
             _index = index;
@@ -120,8 +124,7 @@ internal sealed class IndexService : IDisposable
 
             var timer = System.Diagnostics.Stopwatch.StartNew();
             int loaded = store.LoadIntoMemory(token);
-            DiagnosticLog.Info($"Directory loaded: {loaded} entries in {timer.ElapsedMilliseconds} ms.");
-
+            FileLog.Shared.Info($"Directory loaded: {loaded} entries in {timer.ElapsedMilliseconds} ms.");
             usage.Reload();
             RefreshRoots(store);
             UpdateScanState(store);
@@ -136,11 +139,11 @@ internal sealed class IndexService : IDisposable
                 {
                     if (ex is null)
                     {
-                        DiagnosticLog.Info(message);
+                        FileLog.Shared.Info(message);
                     }
                     else
                     {
-                        DiagnosticLog.Error(message, ex);
+                        FileLog.Shared.Error(message, ex);
                     }
                 },
             });
@@ -161,7 +164,7 @@ internal sealed class IndexService : IDisposable
             _watcher.Sync(roots);
 
             var scheduler = new RefreshScheduler(TimeProvider.System, store.GetRoots, _reachability, _queue.Enqueue);
-            scheduler.Failed += ex => DiagnosticLog.Error("Refresh check failed", ex);
+            scheduler.Failed += ex => FileLog.Shared.Error("Refresh check failed", ex);
             _scheduler = scheduler;
             scheduler.Start();
 
@@ -177,10 +180,29 @@ internal sealed class IndexService : IDisposable
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Error("Start-up work failed", ex);
+            FileLog.Shared.Error("Start-up work failed", ex);
             _loadedSource.TrySetException(ex);
             Failed?.Invoke(ex);
             RaiseStateChanged();
+        }
+    }
+
+    private static void RenumberIfNeeded(IndexDatabase database)
+    {
+        try
+        {
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            var result = DirectoryRenumbering.RenumberIfNeeded(database);
+            if (result.Performed)
+            {
+                FileLog.Shared.Info(
+                    $"Entry numbers compacted: highest number {result.MaxIdBefore} -> {result.MaxIdAfter}, "
+                    + $"{result.EntryCountBefore} rows, {result.DroppedUnreachable} unreachable rows dropped, {timer.ElapsedMilliseconds} ms.");
+            }
+        }
+        catch (Exception ex)
+        {
+            FileLog.Shared.Error("Compacting the entry numbers failed; the old numbers stay", ex);
         }
     }
 
@@ -235,10 +257,8 @@ internal sealed class IndexService : IDisposable
             var stats = executor.Run(request, token);
             if (stats is not null)
             {
-                DiagnosticLog.Info(
-                    $"Scan of {root.Path} ({request.Trigger}): {stats.Outcome}, {stats.DirectoriesListed} directories, "
-                    + $"{stats.Entries} entries, {stats.FailedDirectories} failed, +{stats.Inserted} ~{stats.Updated} "
-                    + $"-{stats.Deleted}, {stats.Duration.TotalSeconds:F1} s, pauses {stats.TotalPause.TotalSeconds:F1} s.");
+                // PLAN.md 7.4: directories listed, entries, duration, sum of pauses and errors of every scan go into the log.
+                FileLog.Shared.Info(stats.Describe(root.Path, request.Trigger));
             }
         }
         finally
@@ -252,7 +272,7 @@ internal sealed class IndexService : IDisposable
             }
             catch (Exception ex)
             {
-                DiagnosticLog.Error("Updating the state after a scan failed", ex);
+                FileLog.Shared.Error("Updating the state after a scan failed", ex);
             }
         }
     }
@@ -302,7 +322,7 @@ internal sealed class IndexService : IDisposable
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Error("Checking the reachability failed", ex);
+            FileLog.Shared.Error("Checking the reachability failed", ex);
         }
     }
 
@@ -326,7 +346,7 @@ internal sealed class IndexService : IDisposable
         }
 
         var root = store.AddRoot(candidate.Path, candidate.UncPath, candidate.Kind);
-        DiagnosticLog.Info($"Location added: {root.Path} ({root.Kind}).");
+        FileLog.Shared.Info($"Location added: {root.Path} ({root.Kind}).");
         RefreshRoots(store);
 
         // The watcher starts before the first scan, so nothing that happens during the scan is missed.
@@ -365,9 +385,49 @@ internal sealed class IndexService : IDisposable
                 RefreshRoots(store);
                 _usage?.Reload();
                 UpdateScanState(store);
-                DiagnosticLog.Info($"Location {rootId} removed with {removed} entries.");
+                FileLog.Shared.Info($"Location {rootId} removed with {removed} entries.");
                 return removed;
             }
+        }
+        finally
+        {
+            RaiseStateChanged();
+        }
+    }
+
+    /// <summary>
+    /// "Rebuild directory" (PLAN.md 8.5): cancels running scans, empties the entries of all locations (the locations and
+    /// the usage history stay), reloads the memory and queues every enabled location for a scan. The scans count as
+    /// manual requests: they do not count against the daily limit of a share, and the pauses of share scans stay as
+    /// always. If emptying fails, the old directory is kept. Blocks while it waits for running scans to end; call from
+    /// a background thread.
+    /// </summary>
+    /// <returns>Number of removed entries.</returns>
+    public int RebuildDirectory()
+    {
+        var store = _store ?? throw new InvalidOperationException("The directory is not loaded.");
+        try
+        {
+            var result = DirectoryRebuilder.Rebuild(
+                store,
+                _queue,
+                _locks,
+                unwatch: id => _watcher?.Unwatch(id),
+                resumeWatching: roots => _watcher?.Sync(roots),
+                afterReset: () =>
+                {
+                    RefreshRoots(store);
+                    _usage?.Reload();
+                    UpdateScanState(store);
+                },
+                log: FileLog.Shared.Info);
+            FileLog.Shared.Info($"Rebuild: {result.Queued} locations queued for a scan.");
+            return result.Removed;
+        }
+        catch (Exception ex)
+        {
+            FileLog.Shared.Error("Rebuilding the directory failed", ex);
+            throw;
         }
         finally
         {
@@ -401,7 +461,7 @@ internal sealed class IndexService : IDisposable
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Error("A state listener failed", ex);
+            FileLog.Shared.Error("A state listener failed", ex);
         }
     }
 
@@ -428,7 +488,7 @@ internal sealed class IndexService : IDisposable
         _watcher?.Dispose();
         if (!_queue.Shutdown(TimeSpan.FromSeconds(5)))
         {
-            DiagnosticLog.Info("The running scan did not end within 5 s at exit.");
+            FileLog.Shared.Info("The running scan did not end within 5 s at exit.");
         }
 
         _queue.Dispose();

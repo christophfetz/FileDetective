@@ -24,6 +24,12 @@ public partial class App : System.Windows.Application
     {
         bool autostart = e.Args.Contains("--autostart", StringComparer.OrdinalIgnoreCase);
 
+        // PLAN.md 8.1: unhandled exceptions are logged and reported in the tray; on the UI thread the program goes on.
+        // The log starts working as soon as FileLog.Initialize ran below; until then the shared log writes nothing.
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+
         // Settings first: the language must be known before any text is read.
         _settings = new SettingsService(AppPaths.SettingsPath);
         var loadResult = _settings.Load();
@@ -45,11 +51,11 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        DiagnosticLog.Initialize();
-        DiagnosticLog.Info($"FileDetective starts. Data folder: {AppPaths.DataDirectory}");
+        FileLog.Initialize(AppPaths.LogPath);
+        FileLog.Shared.Info($"FileDetective starts. Data folder: {AppPaths.DataDirectory}");
         if (loadResult == SettingsLoadResult.CorruptRenamed)
         {
-            DiagnosticLog.Info($"settings.json was unreadable and moved to {_settings.BackupPath}; defaults apply.");
+            FileLog.Shared.Info($"settings.json was unreadable and moved to {_settings.BackupPath}; defaults apply.");
         }
 
         // Nothing here touches the database or the file system of the locations: the index service does that
@@ -94,7 +100,7 @@ public partial class App : System.Windows.Application
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Error("Creating the hotkey window failed", ex);
+            FileLog.Shared.Error("Creating the hotkey window failed", ex);
             ShowBalloon(Strings.Get("Hotkey_FailedTitle"), ex.Message, Forms.ToolTipIcon.Warning);
         }
 
@@ -123,6 +129,96 @@ public partial class App : System.Windows.Application
         }
     }
 
+    // ---------------------------------------------------------------- unhandled exceptions (PLAN.md 8.1)
+
+    /// <summary>At most one balloon per this time, so a repeating error cannot flood the screen.</summary>
+    private static readonly TimeSpan ErrorBalloonInterval = TimeSpan.FromSeconds(10);
+
+    private long _lastErrorBalloonTicks = long.MinValue;
+
+    private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    {
+        FileLog.Shared.Error("Unhandled exception on the UI thread", e.Exception);
+        ReportUnhandled(e.Exception);
+        e.Handled = true; // the program keeps running
+    }
+
+    private void OnDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        var exception = e.ExceptionObject as Exception;
+        FileLog.Shared.Error(
+            $"Unhandled exception (the program {(e.IsTerminating ? "ends" : "goes on")})",
+            exception ?? new InvalidOperationException(e.ExceptionObject?.ToString() ?? "unknown error object"));
+        ReportUnhandled(exception);
+    }
+
+    private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        FileLog.Shared.Error("Unobserved exception of a background task", e.Exception);
+        e.SetObserved();
+        ReportUnhandled(e.Exception.GetBaseException());
+    }
+
+    /// <summary>Shows the balloon (on the UI thread, rate limited). Never throws.</summary>
+    private void ReportUnhandled(Exception? exception)
+    {
+        try
+        {
+            long now = Environment.TickCount64;
+            long last = Interlocked.Read(ref _lastErrorBalloonTicks);
+            if (last != long.MinValue && now - last < ErrorBalloonInterval.TotalMilliseconds)
+            {
+                return;
+            }
+
+            Interlocked.Exchange(ref _lastErrorBalloonTicks, now);
+            string reason = exception?.Message ?? string.Empty;
+            if (reason.Length > 200)
+            {
+                reason = reason[..200] + "…";
+            }
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    ShowBalloon(
+                        Strings.Get("Error_Title"),
+                        string.Format(CultureInfo.CurrentCulture, Strings.Get("Error_Unhandled"), reason),
+                        Forms.ToolTipIcon.Error);
+                }
+                catch (Exception ex)
+                {
+                    FileLog.Shared.Error("Showing the error balloon failed", ex);
+                }
+            }));
+        }
+        catch (Exception)
+        {
+            // Reporting an error must never cause another one.
+        }
+    }
+
+    /// <summary>The program icon in the size the notification area asks for; the system icon if that fails.</summary>
+    private static Icon LoadTrayIcon()
+    {
+        try
+        {
+            var info = GetResourceStream(new Uri("pack://application:,,,/Assets/FileDetective.ico", UriKind.Absolute));
+            if (info is not null)
+            {
+                using var stream = info.Stream;
+                return new Icon(stream, Forms.SystemInformation.SmallIconSize);
+            }
+        }
+        catch (Exception ex)
+        {
+            FileLog.Shared.Error("Loading the tray icon failed", ex);
+        }
+
+        return SystemIcons.Application;
+    }
+
     /// <summary>Registers the hotkey; returns null on success or the reason. The previous hotkey stays on failure.</summary>
     private string? TryApplyHotkey(HotkeyGesture gesture)
     {
@@ -136,7 +232,7 @@ public partial class App : System.Windows.Application
             return null;
         }
 
-        DiagnosticLog.Error($"Registering {gesture.Format()} failed: {error}");
+        FileLog.Shared.Error($"Registering {gesture.Format()} failed: {error}");
         return error;
     }
 
@@ -237,7 +333,7 @@ public partial class App : System.Windows.Application
 
         _trayIcon = new Forms.NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = LoadTrayIcon(),
             Text = Strings.Get("Tray_Tooltip"),
             ContextMenuStrip = menu,
             Visible = true,
@@ -310,6 +406,6 @@ public partial class App : System.Windows.Application
         _bar?.Close();
         _index?.Dispose();
         _index = null;
-        DiagnosticLog.Info("FileDetective stopped.");
+        FileLog.Shared.Info("FileDetective stopped.");
     }
 }

@@ -56,7 +56,7 @@ internal static class LocationUi
         }
         catch (TimeoutException)
         {
-            DiagnosticLog.Error("Finding the drives took too long.");
+            FileLog.Shared.Error("Finding the drives took too long.");
             return [];
         }
     }

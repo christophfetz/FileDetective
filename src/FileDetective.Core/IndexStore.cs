@@ -286,6 +286,78 @@ public sealed class IndexStore : IDisposable
     }
 
     /// <summary>
+    /// "Rebuild directory" (PLAN.md 8.5, stage 7): deletes every entry of every location in one transaction, gives each
+    /// location a fresh root entry and sets its scan state back to "never scanned" (so the watcher leaves it to the
+    /// coming scan, and shares count as due). The locations themselves, their attempt counters and the table
+    /// <c>usage</c> stay. Entry numbers continue to grow (decision: never reused, also here, so a stale number held by a
+    /// window can never hit a new entry; the renumbering at the next start compacts them). The memory is emptied and
+    /// refilled with the root entries under one write lock. If the database write fails, nothing changes.
+    /// The caller makes sure that no scan and no watcher works on the locations (see <see cref="LocationLocks"/>).
+    /// </summary>
+    /// <returns>Number of removed entries.</returns>
+    public int ResetAllEntries()
+    {
+        lock (_writeLock)
+        {
+            IReadOnlyList<RootInfo> roots;
+            lock (_readLock)
+            {
+                roots = ReadRoots(null);
+            }
+
+            int removed;
+            var fresh = new List<(int EntryId, RootInfo Root)>();
+            using (var tx = _writeConnection.BeginTransaction())
+            {
+                using (var cmd = Command(_writeConnection, tx, "SELECT COUNT(*) FROM entries"))
+                {
+                    removed = Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+                }
+
+                using (var cmd = Command(_writeConnection, tx, "DELETE FROM entries"))
+                {
+                    cmd.ExecuteNonQuery();
+                }
+
+                using (var cmd = Command(
+                    _writeConnection, tx,
+                    "UPDATE roots SET last_scan_status = 0, last_scan_completed_utc = NULL, last_scan_failed_dirs = 0"))
+                {
+                    cmd.ExecuteNonQuery();
+                }
+
+                foreach (var root in roots)
+                {
+                    int entryId = AllocateId();
+                    using var cmd = Command(
+                        _writeConnection, tx,
+                        "INSERT INTO entries(id, parent_id, root_id, name, is_dir, size, mtime, attrs) VALUES(@id, 0, @root, @name, 1, 0, 0, @attrs)");
+                    cmd.Parameters.AddWithValue("@id", entryId);
+                    cmd.Parameters.AddWithValue("@root", (int)root.Id);
+                    cmd.Parameters.AddWithValue("@name", root.Path);
+                    cmd.Parameters.AddWithValue("@attrs", (int)FileAttributes.Directory);
+                    cmd.ExecuteNonQuery();
+                    fresh.Add((entryId, root));
+                }
+
+                PersistMaxId(tx);
+                tx.Commit();
+            }
+
+            using (var scope = _index.BeginUpdate())
+            {
+                scope.Clear();
+                foreach (var (entryId, root) in fresh)
+                {
+                    scope.Set(entryId, 0, root.Id, root.Path, true, 0);
+                }
+            }
+
+            return removed;
+        }
+    }
+
+    /// <summary>
     /// Number of stored entries per location (the root entry counts), for the settings window. One pass over the table;
     /// call it from a background thread.
     /// </summary>

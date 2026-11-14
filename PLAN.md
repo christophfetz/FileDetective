@@ -553,7 +553,7 @@ Abnahme durch Tests: gleiche Größe mit verschiedenem Inhalt ist keine Dublette
 - [x] Etappe 4 – Suchleiste
 - [x] Etappe 5 – Orte und Einstellungen
 - [x] Etappe 6 – Aktualität
-- [ ] Etappe 7 – Feinschliff
+- [x] Etappe 7 – Feinschliff
 - [ ] Etappe 8 – Veröffentlichung
 - [ ] Firmentest
 - [ ] Etappe 9 – Speicherplatz

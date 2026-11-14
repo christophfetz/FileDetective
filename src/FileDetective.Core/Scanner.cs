@@ -42,7 +42,19 @@ public sealed record ScanStatistics(
     TimeSpan TotalPause,
     int Inserted,
     int Updated,
-    int Deleted);
+    int Deleted)
+{
+    /// <summary>
+    /// One log line with everything PLAN.md 7.4 asks for (listed directories, entries, duration, sum of the pauses, errors),
+    /// plus the changes written. Culture-independent, so log lines look the same on every machine.
+    /// </summary>
+    public string Describe(string location, ScanTrigger trigger)
+        => string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"Scan of {location} ({trigger}): {Outcome}, {DirectoriesListed} directories listed, {Entries} entries, "
+            + $"{FailedDirectories} failed directories, {Excluded} excluded, +{Inserted} ~{Updated} -{Deleted}, "
+            + $"duration {Duration.TotalSeconds:F1} s, pauses {TotalPause.TotalSeconds:F1} s.");
+}
 
 /// <summary>Optional settings of a <see cref="Scanner"/>.</summary>
 public sealed class ScannerOptions

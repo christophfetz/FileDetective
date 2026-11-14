@@ -219,7 +219,7 @@ public partial class FirstRunWindow : Window
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Error("First-run set-up failed", ex);
+            FileLog.Shared.Error("First-run set-up failed", ex);
             SetBusy(false);
             ShowMessage(LocationUi.Format("Msg_SetupFailed", ex.Message));
         }
@@ -241,7 +241,7 @@ public partial class FirstRunWindow : Window
         catch (Exception ex)
         {
             // Not fatal: it can be switched in the settings later.
-            DiagnosticLog.Error("Setting the autostart failed", ex);
+            FileLog.Shared.Error("Setting the autostart failed", ex);
         }
     }
 

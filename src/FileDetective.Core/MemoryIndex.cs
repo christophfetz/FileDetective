@@ -177,6 +177,23 @@ public sealed partial class MemoryIndex : IDisposable
         }
     }
 
+    /// <summary>
+    /// Removes every entry and releases the name store (stage 7, "Rebuild directory"). Entry numbers can be given out
+    /// again by the caller; the index itself imposes no memory of earlier numbers.
+    /// </summary>
+    public void Clear()
+    {
+        _lock.EnterWriteLock();
+        try
+        {
+            ClearCore();
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+    }
+
     /// <summary>Changes the last write time of an entry (stage 2 addition, used when a scan finds a changed file).</summary>
     /// <returns>False if the entry does not exist or is deleted.</returns>
     public bool UpdateMTime(int id, long lastWriteUnixSeconds)
@@ -236,6 +253,9 @@ public sealed partial class MemoryIndex : IDisposable
 
         /// <inheritdoc cref="MemoryIndex.Delete"/>
         public readonly bool Delete(int id) => Index.DeleteCore(id);
+
+        /// <inheritdoc cref="MemoryIndex.Clear"/>
+        public readonly void Clear() => Index.ClearCore();
 
         /// <inheritdoc cref="MemoryIndex.UpdateMTime"/>
         public readonly bool UpdateMTime(int id, long lastWriteUnixSeconds) => Index.UpdateMTimeCore(id, lastWriteUnixSeconds);
@@ -328,6 +348,16 @@ public sealed partial class MemoryIndex : IDisposable
             ? (byte)(slot.Flags | EntryFlags.RootEntry)
             : (byte)(slot.Flags & ~EntryFlags.RootEntry);
         return true;
+    }
+
+    private void ClearCore()
+    {
+        _blocks = new EntryRec[]?[16];
+        Array.Clear(_segments);
+        _segmentCount = 0;
+        _segmentUsed = 0;
+        _maxId = 0;
+        _count = 0;
     }
 
     private bool UpdateMTimeCore(int id, long lastWriteUnixSeconds)

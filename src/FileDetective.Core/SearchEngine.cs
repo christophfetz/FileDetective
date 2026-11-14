@@ -27,6 +27,51 @@ public sealed class SearchEngine
     public SearchResult Search(string? input, SearchMode mode, CancellationToken cancellationToken = default)
         => Search(SearchQuery.Parse(input, mode), cancellationToken);
 
+    /// <summary>
+    /// The entries last opened through the tool, newest first, at most <paramref name="max"/> (PLAN.md 6.4: shown for an
+    /// empty input). Only entries that still exist in the directory are returned, and only those that fit
+    /// <paramref name="mode"/>. The hits carry no name level and quality.
+    /// </summary>
+    public SearchResult RecentlyOpened(SearchMode mode, int max = MaxResults, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(max, 1);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_usage is not IRecentUsage recent)
+        {
+            return SearchResult.Empty;
+        }
+
+        // Ids of vanished entries or of the other mode are skipped, so ask for more until enough hits are there or the
+        // list is used up.
+        int take = max * 2;
+        while (true)
+        {
+            var ids = recent.GetMostRecent(take);
+            var details = _resolver.Resolve(ids, cancellationToken);
+            if (details.Count != ids.Count)
+            {
+                throw new InvalidOperationException("The entry resolver must return one element per requested id.");
+            }
+
+            var hits = new List<SearchHit>(Math.Min(max, ids.Count));
+            for (int i = 0; i < ids.Count && hits.Count < max; i++)
+            {
+                if (details[i] is { } d
+                    && (mode == SearchMode.All || (mode == SearchMode.Folders) == d.IsDirectory))
+                {
+                    hits.Add(new SearchHit(ids[i], d, 0, 0));
+                }
+            }
+
+            if (hits.Count >= max || ids.Count < take)
+            {
+                return new SearchResult(hits, hits.Count);
+            }
+
+            take *= 4;
+        }
+    }
+
     /// <summary>Searches for an already parsed query.</summary>
     public SearchResult Search(SearchQuery query, CancellationToken cancellationToken = default)
     {

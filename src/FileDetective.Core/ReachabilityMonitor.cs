@@ -144,7 +144,7 @@ public sealed class ReachabilityMonitor : IReachability
             _lastCheckAll = _time.GetUtcNow();
         }
 
-        var checks = rootPaths.Distinct(StringComparer.OrdinalIgnoreCase).Select(p => CheckAsync(p, cancellationToken)).ToList();
+        var checks = rootPaths.DistinctBy(Key, StringComparer.OrdinalIgnoreCase).Select(p => CheckAsync(p, cancellationToken)).ToList();
         await Task.WhenAll(checks).ConfigureAwait(false);
     }
 
