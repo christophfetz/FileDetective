@@ -427,6 +427,98 @@ public sealed class IndexStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// Stage 10 (PLAN.md 11.2): every file of the given locations with at least <paramref name="minSize"/> bytes, smallest
+    /// first, in one pass over the index on <c>entries(size)</c>. Read-only, on its own connection like
+    /// <see cref="ReadEntriesOfRoot"/>.
+    /// </summary>
+    public void ReadFilesOfMinSize(
+        long minSize, IReadOnlySet<byte> rootIds, Action<StoredEntry> visit, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rootIds);
+        ArgumentNullException.ThrowIfNull(visit);
+        if (rootIds.Count == 0)
+        {
+            return;
+        }
+
+        using var connection = _database.OpenConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText =
+            "SELECT id, parent_id, root_id, name, is_dir, size, mtime, attrs FROM entries WHERE size >= @min AND is_dir = 0 ORDER BY size";
+        cmd.Parameters.AddWithValue("@min", Math.Max(1, minSize));
+        using var r = cmd.ExecuteReader();
+        int n = 0;
+        while (r.Read())
+        {
+            if ((++n & 0x3FFF) == 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            byte root = (byte)r.GetInt32(2);
+            if (!rootIds.Contains(root))
+            {
+                continue;
+            }
+
+            visit(new StoredEntry(
+                r.GetInt32(0), r.GetInt32(1), root, r.GetString(3), false,
+                r.GetInt64(5), r.GetInt64(6), (FileAttributes)r.GetInt32(7)));
+        }
+    }
+
+    /// <summary>The stored hashes of the given entries (stage 10); entries without a row are missing from the result.</summary>
+    public IReadOnlyDictionary<int, StoredHash> GetHashes(IReadOnlyCollection<int> entryIds)
+    {
+        ArgumentNullException.ThrowIfNull(entryIds);
+        var result = new Dictionary<int, StoredHash>();
+        lock (_readLock)
+        {
+            using var cmd = Command(_readConnection, null, "SELECT size, mtime, partial, full FROM hashes WHERE entry_id = @id");
+            var p = cmd.Parameters.Add("@id", SqliteType.Integer);
+            foreach (int id in entryIds)
+            {
+                p.Value = id;
+                using var r = cmd.ExecuteReader();
+                if (r.Read())
+                {
+                    result[id] = new StoredHash(
+                        id, r.GetInt64(0), r.GetInt64(1),
+                        r.IsDBNull(2) ? null : (byte[])r.GetValue(2),
+                        r.IsDBNull(3) ? null : (byte[])r.GetValue(3));
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Stores the hashes of an entry (stage 10), replacing an older row. Written only while the entry exists, under the
+    /// same lock as every deletion, so no row of a removed entry can stay behind (the trigger removes the rest).
+    /// </summary>
+    /// <returns>False if the entry no longer exists.</returns>
+    public bool SaveHash(StoredHash hash)
+    {
+        ArgumentNullException.ThrowIfNull(hash);
+        lock (_writeLock)
+        {
+            using var cmd = Command(
+                _writeConnection, null,
+                """
+                INSERT OR REPLACE INTO hashes(entry_id, size, mtime, partial, full)
+                SELECT @id, @size, @mtime, @partial, @full WHERE EXISTS (SELECT 1 FROM entries WHERE id = @id)
+                """);
+            cmd.Parameters.AddWithValue("@id", hash.EntryId);
+            cmd.Parameters.AddWithValue("@size", hash.Size);
+            cmd.Parameters.AddWithValue("@mtime", hash.MTimeTicks);
+            cmd.Parameters.Add("@partial", SqliteType.Blob).Value = (object?)hash.Partial ?? DBNull.Value;
+            cmd.Parameters.Add("@full", SqliteType.Blob).Value = (object?)hash.Full ?? DBNull.Value;
+            return cmd.ExecuteNonQuery() > 0;
+        }
+    }
+
     /// <summary>One entry from the database or null (stage 3 addition for subtree scans).</summary>
     public StoredEntry? GetEntry(int id)
     {

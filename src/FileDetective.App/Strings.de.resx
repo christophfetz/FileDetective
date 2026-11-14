@@ -204,4 +204,39 @@ Sie werden durch {0} ersetzt. Fortfahren?</value></data>
   <data name="Storage_ConfirmFile" xml:space="preserve"><value>Die Datei {0} ({1}) in den Papierkorb verschieben? Sie können sie von dort wiederherstellen. Der Platz wird erst frei, wenn der Papierkorb geleert wird.</value></data>
   <data name="Storage_Recycled" xml:space="preserve"><value>In den Papierkorb verschoben: {0}</value></data>
   <data name="Storage_RecycleFailed" xml:space="preserve"><value>Es konnte nicht in den Papierkorb verschoben werden: {0}</value></data>
+  <data name="Menu_Duplicates" xml:space="preserve"><value>Dubletten …</value></data>
+  <data name="Dup_Title" xml:space="preserve"><value>FileDetective – Dubletten</value></data>
+  <data name="Dup_Intro" xml:space="preserve"><value>Dateien gleicher Größe auf lokalen Laufwerken werden nach ihrem Inhalt verglichen: zuerst die ersten 64 KB, dann die ganze Datei (SHA-256). Dateien, die nur in der Cloud liegen, werden nie gelesen, und harte Verknüpfungen auf dieselbe Datei zählen einmal. Gelesen wird mit niedriger Priorität, und die Suche lässt sich jederzeit abbrechen. Freigaben werden nur im Verzeichnis nachgeschlagen; auf dem Server wird nichts geöffnet.</value></data>
+  <data name="Dup_MinSize" xml:space="preserve"><value>Mindestgröße:</value></data>
+  <data name="Dup_Search" xml:space="preserve"><value>Suchen</value></data>
+  <data name="Dup_TabLocal" xml:space="preserve"><value>Lokal – Inhalt verglichen</value></data>
+  <data name="Dup_TabShares" xml:space="preserve"><value>Freigaben – mögliche Dubletten, nicht geprüft</value></data>
+  <data name="Dup_LocalHint" xml:space="preserve"><value>Jede Gruppe enthält Dateien mit genau gleichem Inhalt. Markieren Sie die Kopien, die Sie nicht brauchen; mindestens eine Datei jeder Gruppe bleibt immer unmarkiert. Dateien auf Wechseldatenträgern werden verglichen, aber nicht verschoben.</value></data>
+  <data name="Dup_SharesHint" xml:space="preserve"><value>Mögliche Dubletten, nicht geprüft: Diese Dateien haben laut Verzeichnis nur denselben Namen und dieselbe Größe. Ihr Inhalt wurde nicht verglichen, und auf dem Server wurde nichts gelesen. Prüfen Sie sie selbst, bevor Sie etwas löschen; für Freigaben gibt es hier keine Löschfunktion.</value></data>
+  <data name="Dup_MarkExceptNewest" xml:space="preserve"><value>Alle außer der neuesten markieren</value></data>
+  <data name="Dup_MarkExceptFolder" xml:space="preserve"><value>Alle außer denen in diesem Ordner markieren</value></data>
+  <data name="Dup_MarkExceptFolderTip" xml:space="preserve"><value>Behält die Dateien im Ordner der ausgewählten Datei und in seinen Unterordnern und markiert die übrigen Dateien derselben Gruppen.</value></data>
+  <data name="Dup_ClearMarks" xml:space="preserve"><value>Markierungen aufheben</value></data>
+  <data name="Dup_Recycle" xml:space="preserve"><value>In den Papierkorb …</value></data>
+  <data name="Dup_Loading" xml:space="preserve"><value>Verzeichnis wird gelesen …</value></data>
+  <data name="Dup_Failed" xml:space="preserve"><value>Die Suche ist fehlgeschlagen: {0}</value></data>
+  <data name="Dup_Cancelled" xml:space="preserve"><value>Die Suche wurde abgebrochen. Bereits verglichene Dateien werden für die nächste Suche gemerkt.</value></data>
+  <data name="Dup_Done" xml:space="preserve"><value>{0:N0} Gruppen, {1} verschwendet. {2:N0} Dateien gleicher Größe geprüft, {3} gelesen, {4:N0} Ergebnisse wiederverwendet.</value></data>
+  <data name="Dup_Skipped" xml:space="preserve"><value>Nicht verglichen: {0:N0} nur in der Cloud, {1:N0} Verknüpfungen, {2:N0} seit dem letzten Durchlauf geändert, {3:N0} nicht lesbar; {4:N0} harte Verknüpfungen einmal gezählt.</value></data>
+  <data name="Dup_ProgressChecking" xml:space="preserve"><value>Dateien werden geprüft: {0:N0} von {1:N0} …</value></data>
+  <data name="Dup_ProgressPartial" xml:space="preserve"><value>Die ersten 64 KB werden verglichen: {0:N0} von {1:N0} Dateien, {2} gelesen …</value></data>
+  <data name="Dup_ProgressFull" xml:space="preserve"><value>Ganze Dateien werden verglichen: {0:N0} von {1:N0} Dateien, {2} gelesen …</value></data>
+  <data name="Dup_NoneLocal" xml:space="preserve"><value>Auf lokalen Laufwerken wurden keine Dubletten gefunden.</value></data>
+  <data name="Dup_NoneShares" xml:space="preserve"><value>Auf Freigaben wurden keine möglichen Dubletten gefunden.</value></data>
+  <data name="Dup_NotSearched" xml:space="preserve"><value>Klicken Sie auf „Suchen“, um nach Dubletten zu suchen.</value></data>
+  <data name="Dup_SelectFileFirst" xml:space="preserve"><value>Wählen Sie zuerst eine Datei aus: Die Dateien in ihrem Ordner bleiben erhalten.</value></data>
+  <data name="Dup_FolderKept" xml:space="preserve"><value>Dateien in {0} bleiben erhalten; {1:N0} Gruppen geändert.</value></data>
+  <data name="Dup_MarkedSummary" xml:space="preserve"><value>{0:N0} Dateien markiert ({1})</value></data>
+  <data name="Dup_Confirm" xml:space="preserve"><value>{0:N0} Dateien ({1}) in den Papierkorb verschieben? Unmittelbar vor dem Verschieben werden Größe und Datum jeder Datei erneut geprüft; eine geänderte Datei wird übersprungen. Sie können die Dateien aus dem Papierkorb wiederherstellen. Der Platz wird erst frei, wenn der Papierkorb geleert wird.</value></data>
+  <data name="Dup_RecycleMoved" xml:space="preserve"><value>{0:N0} Dateien in den Papierkorb verschoben.</value></data>
+  <data name="Dup_RecycleSkipped" xml:space="preserve"><value>{0:N0} übersprungen, weil sie oder die behaltene Kopie sich nach dem Vergleich geändert haben: {1}</value></data>
+  <data name="Dup_RecycleFailed" xml:space="preserve"><value>{0:N0} konnten nicht verschoben werden: {1}</value></data>
+  <data name="Dup_GroupTitle" xml:space="preserve"><value>{0:N0} gleiche Dateien zu je {1} · {2} verschwendet</value></data>
+  <data name="Dup_GroupTitleUnchecked" xml:space="preserve"><value>{0:N0} Dateien mit gleichem Namen und gleicher Größe zu je {1} · nicht geprüft · bis zu {2}</value></data>
+  <data name="Dup_NoteRemovable" xml:space="preserve"><value>Wechseldatenträger: verglichen, aber nicht verschoben</value></data>
 </root>

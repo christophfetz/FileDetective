@@ -157,6 +157,8 @@ Größe und Attribute werden von Anfang an gespeichert, obwohl Version 1 sie nur
 
 `usage` hängt am Pfad und nicht an der Eintragsnummer, damit die Nutzungshistorie einen Neuaufbau des Verzeichnisses übersteht.
 
+Ab Etappe 10 kommen die Tabelle `hashes`, der Index `ix_entries_size` auf `entries(size)` und ein Trigger dazu, der die Prüfsummen gelöschter Einträge entfernt. Sie werden ohne Änderung der Schemaversion mit `CREATE … IF NOT EXISTS` in jede Datenbank gelegt (Einzelheiten in 11.2).
+
 ### 6.2 Suchform eines Namens
 
 `SearchNormalizer.Normalize(string)` liefert UTF-8-Bytes und arbeitet in dieser Reihenfolge:
@@ -565,6 +567,22 @@ Gruppen sortiert nach verschwendetem Platz. Je Gruppe die Dateien mit Pfad und D
 
 Abnahme durch Tests: gleiche Größe mit verschiedenem Inhalt ist keine Dublette; harte Verknüpfung ist keine Dublette; Cloud-Attribut verhindert jedes Lesen (Attrappe zählt Lesezugriffe); geänderte Datei macht die gespeicherte Prüfsumme ungültig; es lassen sich nie alle Dateien einer Gruppe markieren; für Orte der Art „Netzwerk“ wird nie eine Datei geöffnet.
 
+**Umsetzung und Entscheidungen** (Etappe 10, 2026-11-14)
+
+- Aufbau: `DuplicateFinder.cs` (`DuplicateFinder`, `DuplicateArea`, `DuplicateStats`, `DuplicateProgress`), `Duplicates.cs` (`DuplicateGroup`, `DuplicateFile`, `DuplicateMarking`, `DuplicateRecycler`) und `LocalFileAccess.cs` (`ILocalFileAccess`, `SystemLocalFileAccess`, `LowPriorityWork`) in `Core`; `DuplicatesWindow` und `DuplicateRows` in `App`. Das Fenster öffnet sich über „Dubletten …“ im Infobereich-Menü, es gibt höchstens eines.
+- Datenbank: `hashes`, der Index `ix_entries_size` und der Trigger `tr_entries_delete_hashes` (löscht beim Löschen eines Eintrags dessen Prüfsummen) werden bei jedem Öffnen mit `CREATE … IF NOT EXISTS` angelegt (`IndexDatabase.EnsureExtensions`). Die Schemaversion bleibt 1, damit bestehende Verzeichnisse nicht umbenannt und neu aufgebaut werden. Fehlt der Trigger bei vorhandener Tabelle (eine ältere Version hat `entries` bei der Neunummerierung neu gebaut), werden alle Prüfsummen verworfen, weil die Nummern dann anderen Dateien gehören könnten. Die Neunummerierung (6.3) überträgt die Prüfsummen auf die neuen Nummern und legt Index und Trigger neu an. Geschrieben wird eine Prüfsumme nur, solange der Eintrag existiert, unter derselben Sperre wie jedes Löschen.
+- `hashes.mtime` ist die letzte Schreibzeit in UTC-Ticks (100 ns), nicht in Sekunden wie `entries.mtime`, damit eine in derselben Sekunde gleich groß überschriebene Datei ihre alte Prüfsumme verliert. Verglichen wird mit Größe und Datum laut aktueller Auflistung des Elternordners, nicht laut Verzeichnis, weil der Watcher Datumsänderungen nicht meldet. Weicht die Größe vom Verzeichnis ab, wird die Datei übersprungen („seit dem letzten Durchlauf geändert“).
+- Prüfsumme der ersten 64 KB: SHA-256 (aus `System.Security.Cryptography`), nicht `System.IO.Hashing` aus 5.1, weil das ein zusätzliches Paket wäre. Bei Dateien bis 64 KB gilt die erste Prüfsumme zugleich für die ganze Datei.
+- Reihenfolge der Zugriffe je Datei: Cloud-Attribute laut Verzeichnis → aktuelle Angaben aus der Auflistung des Elternordners (`FindFirstFileEx`, öffnet die Datei nicht) → Cloud-Attribute und Linkart erneut → Datenträger- und Dateinummer (`GetFileInformationByHandleEx` mit `FileIdInfo` über ein Öffnen nur für Attribute) → Lesen. Als „nie öffnen“ gelten zusätzlich zu `RecallOnDataAccess` und `Offline` auch `RecallOnOpen` (0x40000). Dateien mit Analysepunkt, deren Tag ein Namensersatz ist (symbolische Links) oder nicht lesbar ist, werden nicht verfolgt; OneDrive-Dateien, die lokal vorliegen, werden normal verglichen.
+- Harte Verknüpfungen: Von mehreren Namen derselben Datei bleibt nur einer in der Gruppe, die übrigen werden gezählt und nicht angezeigt; verschwendet ist Größe × (Zahl verschiedener Dateien − 1).
+- Freigaben: Als Freigabe gilt ein Ort der Art „Netzwerk“, jeder UNC-Pfad, jedes Netzlaufwerk und ein Pfad, den `DriveDiscovery` nicht beschreiben kann, unabhängig von der gespeicherten Art. Für sie wird `ILocalFileAccess` nie aufgerufen. Gruppen entstehen über alle Freigaben hinweg aus Suchform des Namens und Größe; lokale Dateien und Freigaben kommen nie in dieselbe Gruppe. Datum ist das aus dem Verzeichnis. „Im Explorer zeigen“ öffnet den Ordner auf dem Server nur auf ausdrücklichen Klick.
+- Wechseldatenträger werden verglichen, ihre Dateien lassen sich aber nicht markieren und nicht verschieben (ohne Papierkorb wäre das Löschen endgültig), wie in Etappe 9.
+- Markieren: Die Regel „mindestens eine Datei bleibt unmarkiert“ steckt in `DuplicateGroup`; ungeprüfte Gruppen lassen sich gar nicht markieren. „Alle außer der neuesten“ behält die Datei mit der jüngsten Schreibzeit (bei Gleichstand die erste nach Pfad). „Alle außer denen in diesem Ordner“ nimmt den Ordner der ausgewählten Datei samt Unterordnern und wirkt auf alle Gruppen, die dort eine Datei haben; Gruppen ohne Datei dort bleiben unverändert.
+- Papierkorb: Vor dem Verschieben wird für jede markierte Datei Größe und Datum (Ticks) erneut aus der Auflistung geprüft; eine abweichende Datei wird übersprungen und gemeldet. Zusätzlich muss mindestens eine unmarkierte Datei der Gruppe noch unverändert vorhanden sein, sonst wird die ganze Gruppe übersprungen. Danach wird der Eintrag über dieselbe Regel wie bei einem nicht gefundenen Treffer (`ExistenceCheck`, dann `IndexStore.DeleteSubtree`) aus dem Verzeichnis entfernt, nur wenn die Nummer noch für diesen Pfad steht; der Watcher würde es ebenfalls bemerken, beides ist wiederholbar.
+- Lesen: auf einem eigenen Thread mit niedrigster Priorität und `THREAD_MODE_BACKGROUND_BEGIN` (senkt auch die E/A-Priorität), in Blöcken zu 1 MB, Abbruch zwischen den Blöcken. Bereits berechnete Prüfsummen bleiben beim Abbruch gespeichert. Nach dem Lesen wird geprüft, dass sich Größe und Datum nicht geändert haben.
+- Mindestgröße: Einstellung `duplicateMinSize` in `settings.json`, Standard 1 MB, bereinigt auf 1 KB bis 1 TB (0 oder kleiner wird 1 MB). Auswahl im Dubletten-Fenster (64 KB bis 1 GB; ein von Hand eingetragener Wert erscheint zusätzlich).
+- Nur in Gruppen, deren Größe mindestens zweimal vorkommt, wird überhaupt eine Datei angefasst; Pfade werden über `DatabaseEntryResolver` aufgelöst.
+
 ## 12. Stand
 
 - [x] Etappe 0 – Projektgerüst
@@ -578,7 +596,7 @@ Abnahme durch Tests: gleiche Größe mit verschiedenem Inhalt ist keine Dublette
 - [x] Etappe 8 – Veröffentlichung
 - [ ] Firmentest
 - [x] Etappe 9 – Speicherplatz
-- [ ] Etappe 10 – Dubletten
+- [x] Etappe 10 – Dubletten
 
 ## 13. Bewusst nicht enthalten
 

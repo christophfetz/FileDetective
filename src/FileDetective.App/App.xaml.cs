@@ -20,6 +20,7 @@ public partial class App : System.Windows.Application
     private FirstRunWindow? _firstRun;
     private SettingsWindow? _settingsWindow;
     private StorageWindow? _storageWindow;
+    private DuplicatesWindow? _duplicatesWindow;
     private UpdateController? _updates;
     private Forms.ToolStripMenuItem? _updateItem;
     private Mutex? _runningMarker;
@@ -409,6 +410,26 @@ public partial class App : System.Windows.Application
         window.ShowInFront();
     }
 
+    /// <summary>Opens the duplicates window (PLAN.md 11.2), or brings the open one to the front.</summary>
+    private void OpenDuplicates()
+    {
+        if (_services is null)
+        {
+            return;
+        }
+
+        if (_duplicatesWindow is not null)
+        {
+            _duplicatesWindow.ShowInFront();
+            return;
+        }
+
+        var window = new DuplicatesWindow(_services);
+        _duplicatesWindow = window;
+        window.Closed += (_, _) => _duplicatesWindow = null;
+        window.ShowInFront();
+    }
+
     private void CreateTrayIcon()
     {
         var menu = new Forms.ContextMenuStrip();
@@ -419,6 +440,8 @@ public partial class App : System.Windows.Application
         update.Click += (_, _) => _index?.StartScanAll();
         var storageItem = new Forms.ToolStripMenuItem(Strings.Get("Menu_Storage"));
         storageItem.Click += (_, _) => OpenStorage();
+        var duplicatesItem = new Forms.ToolStripMenuItem(Strings.Get("Menu_Duplicates"));
+        duplicatesItem.Click += (_, _) => OpenDuplicates();
         var settingsItem = new Forms.ToolStripMenuItem(Strings.Get("Menu_Settings"));
         settingsItem.Click += (_, _) => OpenSettings(SettingsSection.Locations);
         _statusItem = new Forms.ToolStripMenuItem(Strings.Get("Tray_StatusLoading")) { Enabled = false };
@@ -431,6 +454,7 @@ public partial class App : System.Windows.Application
         menu.Items.Add(search);
         menu.Items.Add(update);
         menu.Items.Add(storageItem);
+        menu.Items.Add(duplicatesItem);
         menu.Items.Add(settingsItem);
         menu.Items.Add(_updateItem);
         menu.Items.Add(_statusItem);
@@ -627,6 +651,7 @@ public partial class App : System.Windows.Application
         _firstRun?.Close();
         _settingsWindow?.Close();
         _storageWindow?.Close();
+        _duplicatesWindow?.Close();
         _bar?.Close();
         _index?.Dispose();
         _index = null;

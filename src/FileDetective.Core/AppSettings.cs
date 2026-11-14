@@ -28,6 +28,15 @@ public sealed record AppSettings
     public const string PolitenessNormal = "normal";
     public const string PolitenessVeryGentle = "veryGentle";
 
+    /// <summary>Default minimum size of the duplicate search: 1 MB.</summary>
+    public const long DuplicateMinSizeDefault = 1024 * 1024;
+
+    /// <summary>Smallest allowed minimum size: 1 KB (smaller files are many and save next to nothing).</summary>
+    public const long DuplicateMinSizeLowest = 1024;
+
+    /// <summary>Largest allowed minimum size: 1 TB.</summary>
+    public const long DuplicateMinSizeHighest = 1024L * 1024 * 1024 * 1024;
+
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
@@ -65,6 +74,13 @@ public sealed record AppSettings
     /// </summary>
     [JsonPropertyName("startMenuChecked")]
     public bool StartMenuChecked { get; init; }
+
+    /// <summary>
+    /// Stage 10 (PLAN.md 11.2): files smaller than this are left out of the duplicate search. Default 1 MB; kept between
+    /// <see cref="DuplicateMinSizeLowest"/> and <see cref="DuplicateMinSizeHighest"/> by <see cref="Sanitized"/>.
+    /// </summary>
+    [JsonPropertyName("duplicateMinSize")]
+    public long DuplicateMinSize { get; init; } = DuplicateMinSizeDefault;
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; init; }
@@ -110,7 +126,8 @@ public sealed record AppSettings
 
     /// <summary>
     /// Replaces invalid values by defaults (unknown hotkey, language or politeness; missing lists) and removes blank
-    /// list entries. A list that is present but empty stays empty: the user may clear it.
+    /// list entries; keeps the minimum size of the duplicate search in its range. A list that is present but empty stays empty:
+    /// the user may clear it.
     /// </summary>
     public AppSettings Sanitized() => this with
     {
@@ -120,7 +137,12 @@ public sealed record AppSettings
         ExcludedFolderNames = Clean(ExcludedFolderNames, ExcludeRules.DefaultFolderNames),
         ExcludedPaths = Clean(ExcludedPaths, ExcludeRules.DefaultPaths),
         ExcludedFileNames = Clean(ExcludedFileNames, ExcludeRules.DefaultFileNames),
+        DuplicateMinSize = SanitizeMinSize(DuplicateMinSize),
     };
+
+    /// <summary>Zero or less (also a missing value) becomes the default; other values are clamped to 1 KB … 1 TB.</summary>
+    public static long SanitizeMinSize(long value)
+        => value <= 0 ? DuplicateMinSizeDefault : Math.Clamp(value, DuplicateMinSizeLowest, DuplicateMinSizeHighest);
 
     private static IReadOnlyList<string> Clean(IReadOnlyList<string>? list, IReadOnlyList<string> fallback)
         => list is null ? fallback : [.. list.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim())];

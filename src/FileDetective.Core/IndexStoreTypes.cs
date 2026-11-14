@@ -40,6 +40,16 @@ public readonly record struct KnownChild(
 public sealed record StoredEntry(
     int Id, int ParentId, byte RootId, string Name, bool IsDirectory, long Size, long MTimeUnixSeconds, FileAttributes Attributes);
 
+/// <summary>
+/// A row of <c>hashes</c> (stage 10, PLAN.md 11.2): SHA-256 of the first 64 KB (<see cref="Partial"/>) and of the whole
+/// file (<see cref="Full"/>, null until needed). Valid only while the file still has <see cref="Size"/> and
+/// <see cref="MTimeTicks"/> (last write time, UTC ticks).
+/// </summary>
+public sealed record StoredHash(int EntryId, long Size, long MTimeTicks, byte[]? Partial, byte[]? Full)
+{
+    public bool IsValidFor(long size, long mtimeTicks) => Size == size && MTimeTicks == mtimeTicks;
+}
+
 /// <summary>A new entry.<see cref="Id"/> comes from <see cref="IndexStore.AllocateId"/>.</summary>
 public readonly record struct EntryInsert(
     int Id, int ParentId, string Name, bool IsDirectory, long Size, long MTimeUnixSeconds, FileAttributes Attributes);

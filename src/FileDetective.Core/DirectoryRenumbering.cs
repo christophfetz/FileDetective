@@ -143,9 +143,20 @@ public static class DirectoryRenumbering
                 throw new InvalidOperationException("The renumbered directory is inconsistent; the old numbers are kept.");
             }
 
+            // Stage 10: the stored hashes follow their entries to the new numbers (negative in between, so no number
+            // collides with one not yet moved); hashes of entries that are not carried over go.
+            IndexDatabase.EnsureExtensions(connection, tx);
+            Execute(connection, tx, "DELETE FROM hashes WHERE entry_id NOT IN (SELECT old_id FROM renumber_map)");
+            Execute(
+                connection, tx,
+                "UPDATE hashes SET entry_id = -(SELECT new_id FROM renumber_map WHERE old_id = hashes.entry_id)");
+            Execute(connection, tx, "UPDATE hashes SET entry_id = -entry_id");
+
+            // Dropping the table also drops its indexes and triggers; EnsureExtensions creates them again.
             Execute(connection, tx, "DROP TABLE entries");
             Execute(connection, tx, "ALTER TABLE entries_new RENAME TO entries");
             Execute(connection, tx, "CREATE INDEX ix_entries_parent ON entries(parent_id)");
+            IndexDatabase.EnsureExtensions(connection, tx, hashesAreMapped: true);
             Execute(connection, tx, "DROP TABLE renumber_map");
 
             using (var cmd = connection.CreateCommand())

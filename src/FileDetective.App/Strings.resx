@@ -204,4 +204,39 @@ They are replaced by {0}. Continue?</value></data>
   <data name="Storage_ConfirmFile" xml:space="preserve"><value>Move the file {0} ({1}) to the Recycle Bin? You can restore it from there. The space is only freed when the Recycle Bin is emptied.</value></data>
   <data name="Storage_Recycled" xml:space="preserve"><value>Moved to the Recycle Bin: {0}</value></data>
   <data name="Storage_RecycleFailed" xml:space="preserve"><value>It could not be moved to the Recycle Bin: {0}</value></data>
+  <data name="Menu_Duplicates" xml:space="preserve"><value>Duplicates…</value></data>
+  <data name="Dup_Title" xml:space="preserve"><value>FileDetective – Duplicates</value></data>
+  <data name="Dup_Intro" xml:space="preserve"><value>Files on local drives with the same size are compared by their content: first the first 64 KB, then the whole file (SHA-256). Files that are only in the cloud are never read, and hard links to the same file count once. Reading runs with low priority and can be cancelled at any time. Shares are only looked up in the directory; nothing on the server is opened.</value></data>
+  <data name="Dup_MinSize" xml:space="preserve"><value>Minimum size:</value></data>
+  <data name="Dup_Search" xml:space="preserve"><value>Search</value></data>
+  <data name="Dup_TabLocal" xml:space="preserve"><value>Local – content compared</value></data>
+  <data name="Dup_TabShares" xml:space="preserve"><value>Shares – possible duplicates, not checked</value></data>
+  <data name="Dup_LocalHint" xml:space="preserve"><value>Each group holds files with exactly the same content. Mark the copies you do not need; at least one file of every group always stays unmarked. Files on removable drives can be compared but not moved.</value></data>
+  <data name="Dup_SharesHint" xml:space="preserve"><value>Possible duplicates, not checked: these files only have the same name and size according to the directory. Their contents were not compared, and nothing on the server was read. Check them yourself before deleting anything; there is no delete function for shares here.</value></data>
+  <data name="Dup_MarkExceptNewest" xml:space="preserve"><value>Mark all but the newest</value></data>
+  <data name="Dup_MarkExceptFolder" xml:space="preserve"><value>Mark all but those in this folder</value></data>
+  <data name="Dup_MarkExceptFolderTip" xml:space="preserve"><value>Keeps the files in the folder of the selected file and its subfolders, and marks the other files of the same groups.</value></data>
+  <data name="Dup_ClearMarks" xml:space="preserve"><value>Clear marks</value></data>
+  <data name="Dup_Recycle" xml:space="preserve"><value>Move to Recycle Bin…</value></data>
+  <data name="Dup_Loading" xml:space="preserve"><value>Reading the directory…</value></data>
+  <data name="Dup_Failed" xml:space="preserve"><value>The search failed: {0}</value></data>
+  <data name="Dup_Cancelled" xml:space="preserve"><value>The search was cancelled. Files compared so far are remembered for the next search.</value></data>
+  <data name="Dup_Done" xml:space="preserve"><value>{0:N0} groups, {1} wasted. {2:N0} files of the same size checked, {3} read, {4:N0} results reused.</value></data>
+  <data name="Dup_Skipped" xml:space="preserve"><value>Not compared: {0:N0} only in the cloud, {1:N0} links, {2:N0} changed since the last scan, {3:N0} not readable; {4:N0} hard links counted once.</value></data>
+  <data name="Dup_ProgressChecking" xml:space="preserve"><value>Checking the files: {0:N0} of {1:N0}…</value></data>
+  <data name="Dup_ProgressPartial" xml:space="preserve"><value>Comparing the first 64 KB: {0:N0} of {1:N0} files, {2} read…</value></data>
+  <data name="Dup_ProgressFull" xml:space="preserve"><value>Comparing whole files: {0:N0} of {1:N0} files, {2} read…</value></data>
+  <data name="Dup_NoneLocal" xml:space="preserve"><value>No duplicates found on local drives.</value></data>
+  <data name="Dup_NoneShares" xml:space="preserve"><value>No possible duplicates found on shares.</value></data>
+  <data name="Dup_NotSearched" xml:space="preserve"><value>Click Search to look for duplicates.</value></data>
+  <data name="Dup_SelectFileFirst" xml:space="preserve"><value>Select a file first: the files in its folder are kept.</value></data>
+  <data name="Dup_FolderKept" xml:space="preserve"><value>Files in {0} are kept; {1:N0} groups changed.</value></data>
+  <data name="Dup_MarkedSummary" xml:space="preserve"><value>{0:N0} files marked ({1})</value></data>
+  <data name="Dup_Confirm" xml:space="preserve"><value>Move {0:N0} files ({1}) to the Recycle Bin? Right before moving, size and date of every file are checked again; a file that changed is skipped. You can restore the files from the Recycle Bin. The space is only freed when the Recycle Bin is emptied.</value></data>
+  <data name="Dup_RecycleMoved" xml:space="preserve"><value>{0:N0} files moved to the Recycle Bin.</value></data>
+  <data name="Dup_RecycleSkipped" xml:space="preserve"><value>{0:N0} skipped because they or the kept copy changed after the comparison: {1}</value></data>
+  <data name="Dup_RecycleFailed" xml:space="preserve"><value>{0:N0} could not be moved: {1}</value></data>
+  <data name="Dup_GroupTitle" xml:space="preserve"><value>{0:N0} identical files of {1} each · {2} wasted</value></data>
+  <data name="Dup_GroupTitleUnchecked" xml:space="preserve"><value>{0:N0} files with the same name and size of {1} each · not checked · up to {2}</value></data>
+  <data name="Dup_NoteRemovable" xml:space="preserve"><value>removable drive: compared, but not moved</value></data>
 </root>
