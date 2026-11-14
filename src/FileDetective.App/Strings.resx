@@ -155,4 +155,53 @@ They are replaced by {0}. Continue?</value></data>
   <data name="Update_Installing" xml:space="preserve"><value>Downloading and checking the update…</value></data>
   <data name="Update_Failed" xml:space="preserve"><value>The update could not be installed. Nothing was changed. Details are in the log in the data folder.</value></data>
   <data name="Update_ChecksumFailed" xml:space="preserve"><value>The downloaded file does not match its checksum. The update was stopped and nothing was changed.</value></data>
+  <data name="Menu_Storage" xml:space="preserve"><value>Storage space…</value></data>
+  <data name="Storage_Title" xml:space="preserve"><value>FileDetective – Storage space</value></data>
+  <data name="Storage_Drives" xml:space="preserve"><value>Drives and shares</value></data>
+  <data name="Storage_Analyze" xml:space="preserve"><value>Analyze</value></data>
+  <data name="Storage_TabFolders" xml:space="preserve"><value>Folders</value></data>
+  <data name="Storage_TabFiles" xml:space="preserve"><value>Largest files</value></data>
+  <data name="Storage_ColName" xml:space="preserve"><value>Name</value></data>
+  <data name="Storage_ColSize" xml:space="preserve"><value>Size</value></data>
+  <data name="Storage_ColShare" xml:space="preserve"><value>Share</value></data>
+  <data name="Storage_ColFiles" xml:space="preserve"><value>Files</value></data>
+  <data name="Storage_ColFolders" xml:space="preserve"><value>Folders</value></data>
+  <data name="Storage_ColModified" xml:space="preserve"><value>Modified</value></data>
+  <data name="Storage_ColFolder" xml:space="preserve"><value>Folder</value></data>
+  <data name="Storage_Recycle" xml:space="preserve"><value>Move to Recycle Bin…</value></data>
+  <data name="Storage_LocalHint" xml:space="preserve"><value>Local drives are walked completely on request (no exclusions, nothing is changed). The numbers exist only while this window is open. Shares show the state of the last directory scan; the server is not accessed.</value></data>
+  <data name="Storage_NoDrives" xml:space="preserve"><value>No drives or shares found.</value></data>
+  <data name="Storage_NotAnalyzed" xml:space="preserve"><value>Not analyzed yet</value></data>
+  <data name="Storage_NotAnalyzedHint" xml:space="preserve"><value>This drive has not been analyzed yet. Click Analyze to walk it completely. It only reads folder listings, changes nothing and may take a few minutes. The result is kept in memory until you close this window.</value></data>
+  <data name="Storage_NoServerAccess" xml:space="preserve"><value>Numbers from the directory, the server is not accessed.</value></data>
+  <data name="Storage_ShareNeverScanned" xml:space="preserve"><value>This share has not been scanned yet, so there are no numbers.</value></data>
+  <data name="Storage_ShareAsOf" xml:space="preserve"><value>State of the last scan: {0}.</value></data>
+  <data name="Storage_ShareAsOfPartial" xml:space="preserve"><value>State of the last scan: {0}. That scan was not completed, so the numbers may be incomplete.</value></data>
+  <data name="Storage_ShareErrors" xml:space="preserve"><value>{0:N0} folders could not be read at that scan.</value></data>
+  <data name="Storage_ShareTotal" xml:space="preserve"><value>{0} in {1:N0} files</value></data>
+  <data name="Storage_DriveSpace" xml:space="preserve"><value>{0} used of {1} · {2} free</value></data>
+  <data name="Storage_Select" xml:space="preserve"><value>Select a drive or a share.</value></data>
+  <data name="Storage_Reading" xml:space="preserve"><value>Reading the directory…</value></data>
+  <data name="Storage_Working" xml:space="preserve"><value>The drive is being analyzed. You can keep using the program; Cancel stops the analysis.</value></data>
+  <data name="Storage_ReadFailed" xml:space="preserve"><value>The directory could not be read: {0}</value></data>
+  <data name="Storage_ItemAnalyzed" xml:space="preserve"><value>Analyzed {0} · {1:N0} files</value></data>
+  <data name="Storage_Scanning" xml:space="preserve"><value>Analyzing {0}: {1:N0} folders, {2:N0} files, {3} so far</value></data>
+  <data name="Storage_ScanDone" xml:space="preserve"><value>{0} analyzed {1}: {2:N0} files in {3:N0} folders, {4} read.</value></data>
+  <data name="Storage_ScanErrors" xml:space="preserve"><value>{0:N0} folders could not be read and are missing from the numbers; see the line “Unreadable or system area”.</value></data>
+  <data name="Storage_ScanCancelled" xml:space="preserve"><value>The analysis was cancelled; its partial numbers were dropped.</value></data>
+  <data name="Storage_ScanUnreachable" xml:space="preserve"><value>The drive could not be read.</value></data>
+  <data name="Storage_ScanFailed" xml:space="preserve"><value>The analysis failed: {0}</value></data>
+  <data name="Storage_Unreadable" xml:space="preserve"><value>Unreadable or system area</value></data>
+  <data name="Storage_UnreadableTip" xml:space="preserve"><value>Used space according to the drive minus the files that were read: folders without permission, system files and metadata.</value></data>
+  <data name="Storage_NoteUnreadableCount" xml:space="preserve"><value>{0:N0} folders could not be read</value></data>
+  <data name="Storage_NoteLink" xml:space="preserve"><value>link, not entered</value></data>
+  <data name="Storage_NoteUnreadable" xml:space="preserve"><value>cannot be read</value></data>
+  <data name="Storage_NoteCloud" xml:space="preserve"><value>{0:N0} files only in the cloud, not counted ({1})</value></data>
+  <data name="Storage_ActionFailed" xml:space="preserve"><value>The action failed: {0}</value></data>
+  <data name="Storage_Copied" xml:space="preserve"><value>Path copied.</value></data>
+  <data name="Storage_CopyFailed" xml:space="preserve"><value>The path could not be copied, the clipboard is busy.</value></data>
+  <data name="Storage_ConfirmFolder" xml:space="preserve"><value>Move the folder {0} with {1:N0} files ({2}) to the Recycle Bin? You can restore it from there. The space is only freed when the Recycle Bin is emptied.</value></data>
+  <data name="Storage_ConfirmFile" xml:space="preserve"><value>Move the file {0} ({1}) to the Recycle Bin? You can restore it from there. The space is only freed when the Recycle Bin is emptied.</value></data>
+  <data name="Storage_Recycled" xml:space="preserve"><value>Moved to the Recycle Bin: {0}</value></data>
+  <data name="Storage_RecycleFailed" xml:space="preserve"><value>It could not be moved to the Recycle Bin: {0}</value></data>
 </root>

@@ -399,6 +399,34 @@ public sealed class IndexStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// Reads every stored entry of one location in one pass and hands it to <paramref name="visit"/> (stage 9: the storage
+    /// analysis of a share, PLAN.md 11.1). Read-only, on its own connection and without holding the store's locks, so
+    /// scans and searches go on. Decision: a full pass over <c>entries</c> as in <see cref="RemoveRoot"/>; the schema
+    /// has no index on <c>root_id</c> and the analysis runs rarely, on a background thread.
+    /// </summary>
+    public void ReadEntriesOfRoot(byte rootId, Action<StoredEntry> visit, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(visit);
+        using var connection = _database.OpenConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT id, parent_id, root_id, name, is_dir, size, mtime, attrs FROM entries WHERE root_id = @r";
+        cmd.Parameters.AddWithValue("@r", (int)rootId);
+        using var r = cmd.ExecuteReader();
+        int n = 0;
+        while (r.Read())
+        {
+            if ((++n & 0x3FFF) == 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            visit(new StoredEntry(
+                r.GetInt32(0), r.GetInt32(1), (byte)r.GetInt32(2), r.GetString(3), r.GetInt32(4) != 0,
+                r.GetInt64(5), r.GetInt64(6), (FileAttributes)r.GetInt32(7)));
+        }
+    }
+
     /// <summary>One entry from the database or null (stage 3 addition for subtree scans).</summary>
     public StoredEntry? GetEntry(int id)
     {

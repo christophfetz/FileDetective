@@ -237,9 +237,10 @@ public sealed class Scanner
     /// <summary>
     /// Listing failures that count as "directory could not be listed" (PLAN.md 7.2 point 1). IOException covers
     /// DirectoryNotFoundException, PathTooLongException and network errors; the others come from odd names or
-    /// security settings. Anything else is a bug and propagates.
+    /// security settings. Anything else is a bug and propagates. Shared with the storage analysis
+    /// (<see cref="LocalSpaceScanner"/>), so both classify failures the same way.
     /// </summary>
-    private static bool IsListingFailure(Exception ex)
+    internal static bool IsListingFailure(Exception ex)
         => ex is IOException or UnauthorizedAccessException or System.Security.SecurityException
             or ArgumentException or NotSupportedException;
 

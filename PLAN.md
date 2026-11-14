@@ -530,6 +530,20 @@ Dateien, die nur in der Cloud liegen (Attribute `RecallOnDataAccess` oder `Offli
 
 Aktionen je Zeile: Im Explorer zeigen, Pfad kopieren, bei lokalen Einträgen „In den Papierkorb“ mit Rückfrage.
 
+**Umsetzung und Entscheidungen** (Etappe 9, 2026-11-14)
+
+- Aufbau: `SpaceModel.cs` (`SpaceCollector`, `SpaceFolder`, `SpaceFile`, `SpaceSnapshot`), `StorageAnalysis.cs` (`LocalSpaceScanner`, `DirectorySpaceReader`, `StorageAnalysis` als Eingang, `SpaceRecycler`, `IRecycleBin`, `IDriveSpaceSource`, `ByteSize`) in `Core`; `StorageWindow` und `SpaceRow` in `App`. Das Fenster öffnet sich über „Speicherplatz …“ im Infobereich-Menü, es gibt höchstens eines.
+- Gemeinsame Logik mit dem `Scanner`: Der Plan sagt „derselbe `Scanner`“. Der `Scanner` ist aber um den Abgleich mit dem `IndexStore` herum gebaut (bekannte Kinder, Stapel, Zustand in `roots`). Ihn dafür zu zerlegen hätte das Verhalten des Suchverzeichnisses gefährdet. Der lokale Durchlauf hat deshalb eine eigene, kleine Schleife und nutzt dieselben Bausteine: `IDirectoryLister` (`FileSystemDirectoryLister`), `ILinkDetector` (`ReparseTagLinkDetector`; Links werden eingetragen, nicht betreten) und die Regel für Auflistfehler (`Scanner.IsListingFailure`, dafür `internal` gemacht, sonst unverändert). Er hat keinen Zugang zum `IndexStore` und kann dort nichts schreiben.
+- Lokaler Durchlauf: keine Ausschlüsse (auch `System`-Ordner und `$RECYCLE.BIN` werden betreten, soweit lesbar), kein Eintrag in `index.db`, Ergebnis nur im Arbeitsspeicher. Es gibt je Ordner einen Knoten; Dateien werden in ihren Ordner aufsummiert, nur die 1.000 größten bleiben einzeln (begrenzter Haufen). Ein nicht lesbarer Ordner wird gezählt und markiert, der Durchlauf geht weiter. Abbruch verwirft die unvollständigen Zahlen (ein früheres Ergebnis desselben Laufwerks bleibt). Ein Durchlauf gleichzeitig.
+- Laufwerke: Es werden lokale (Fest-)Laufwerke und Wechseldatenträger durchlaufen. Netzlaufwerke und UNC-Pfade werden von `StorageAnalysis` abgelehnt, bevor etwas aufgelistet wird, und für sie wird auch kein freier Platz abgefragt (`DriveInfo` würde den Server berühren). Freigaben sind die Orte der Art „Netzwerk“ aus der Datenbank.
+- Freigaben: `DirectorySpaceReader` liest die Einträge des Ortes in einem Durchgang über eine eigene Lese-Verbindung (`IndexStore.ReadEntriesOfRoot`) und kennt keinen `IDirectoryLister`. Angezeigt wird das Datum des letzten vollständigen Durchlaufs; war der letzte Durchlauf unvollständig oder ist keiner abgeschlossen, steht das dabei. Das Ergebnis wird im Fenster gemerkt und neu gelesen, wenn ein neuerer Durchlauf fertig ist.
+- Größen sind die Dateigrößen laut Verzeichnis, nicht der belegte Platz auf dem Datenträger. Komprimierung, dünn besetzte Dateien und mehrfach benannte Dateien (harte Verknüpfungen) können die Summe über den belegten Platz heben; die Zeile „Nicht lesbar oder Systembereich“ ist dann 0 (nie negativ) und wird auch dann gezeigt.
+- „Nicht lesbar oder Systembereich“ = belegter Platz laut Laufwerk (gesamt minus frei, zum Ende des Durchlaufs) minus Summe der gelesenen Dateien. Sie steht als Zeile unter dem Laufwerk, nur bei lokalen Durchläufen.
+- Cloud-Dateien (`RecallOnDataAccess` 0x400000 oder `Offline`): zählen nicht zur Größe, nicht zur Liste der größten Dateien (sie belegen keinen Platz), werden aber in der Zahl der Dateien mitgezählt und am Ordner als „n Dateien nur in der Cloud, nicht mitgezählt (Größe)“ gekennzeichnet. Es gibt nur Auflistungen von Ordnern, keine Datei wird je geöffnet.
+- Spalten: Anteil = Anteil am übergeordneten Ordner (oberste Zeile: das ganze Laufwerk); Dateien und Ordner zählen rekursiv; Änderungsdatum ist das des Ordners selbst. Die Ordnerliste zeigt Unterordner, die größten zuerst; die Liste der größten Dateien hat die Spalten Name, Ordner, Größe, Geändert.
+- Papierkorb: nur bei Ergebnissen eines lokalen Festlaufwerks, nicht bei Freigaben, nicht bei Wechseldatenträgern (ohne Papierkorb wäre das Löschen endgültig), nicht bei Links und nicht beim Laufwerk selbst. Mit `Microsoft.VisualBasic.FileIO.FileSystem` und `RecycleOption.SendToRecycleBin`, nach einer Rückfrage mit „Nein“ als Vorgabe. Danach werden die Zahlen im Fenster angepasst; die Bytes zählen nicht als „nicht lesbar“, denn sie belegen den Platz bis zum Leeren des Papierkorbs.
+- Im Explorer zeigen und Pfad kopieren gibt es für jede Zeile (Schaltflächen und Kontextmenü); bei Freigaben öffnet „Im Explorer zeigen“ den Ordner auf dem Server, aber nur auf ausdrücklichen Klick des Nutzers.
+
 ### 11.2 Etappe 10 – Dubletten (hoch)
 
 **Lokal, mit Inhaltsvergleich**
@@ -563,7 +577,7 @@ Abnahme durch Tests: gleiche Größe mit verschiedenem Inhalt ist keine Dublette
 - [x] Etappe 7 – Feinschliff
 - [x] Etappe 8 – Veröffentlichung
 - [ ] Firmentest
-- [ ] Etappe 9 – Speicherplatz
+- [x] Etappe 9 – Speicherplatz
 - [ ] Etappe 10 – Dubletten
 
 ## 13. Bewusst nicht enthalten

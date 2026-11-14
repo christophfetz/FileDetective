@@ -155,4 +155,53 @@ Sie werden durch {0} ersetzt. Fortfahren?</value></data>
   <data name="Update_Installing" xml:space="preserve"><value>Update wird geladen und geprüft …</value></data>
   <data name="Update_Failed" xml:space="preserve"><value>Das Update konnte nicht installiert werden. Es wurde nichts verändert. Einzelheiten stehen im Protokoll im Datenordner.</value></data>
   <data name="Update_ChecksumFailed" xml:space="preserve"><value>Die geladene Datei passt nicht zu ihrer Prüfsumme. Das Update wurde abgebrochen, es wurde nichts verändert.</value></data>
+  <data name="Menu_Storage" xml:space="preserve"><value>Speicherplatz …</value></data>
+  <data name="Storage_Title" xml:space="preserve"><value>FileDetective – Speicherplatz</value></data>
+  <data name="Storage_Drives" xml:space="preserve"><value>Laufwerke und Freigaben</value></data>
+  <data name="Storage_Analyze" xml:space="preserve"><value>Analysieren</value></data>
+  <data name="Storage_TabFolders" xml:space="preserve"><value>Ordner</value></data>
+  <data name="Storage_TabFiles" xml:space="preserve"><value>Größte Dateien</value></data>
+  <data name="Storage_ColName" xml:space="preserve"><value>Name</value></data>
+  <data name="Storage_ColSize" xml:space="preserve"><value>Größe</value></data>
+  <data name="Storage_ColShare" xml:space="preserve"><value>Anteil</value></data>
+  <data name="Storage_ColFiles" xml:space="preserve"><value>Dateien</value></data>
+  <data name="Storage_ColFolders" xml:space="preserve"><value>Ordner</value></data>
+  <data name="Storage_ColModified" xml:space="preserve"><value>Geändert</value></data>
+  <data name="Storage_ColFolder" xml:space="preserve"><value>Ordner</value></data>
+  <data name="Storage_Recycle" xml:space="preserve"><value>In den Papierkorb …</value></data>
+  <data name="Storage_LocalHint" xml:space="preserve"><value>Lokale Laufwerke werden auf Wunsch vollständig durchlaufen (ohne Ausschlüsse, es wird nichts verändert). Die Zahlen existieren nur, solange dieses Fenster offen ist. Freigaben zeigen den Stand des letzten Durchlaufs im Verzeichnis; auf den Server wird nicht zugegriffen.</value></data>
+  <data name="Storage_NoDrives" xml:space="preserve"><value>Keine Laufwerke oder Freigaben gefunden.</value></data>
+  <data name="Storage_NotAnalyzed" xml:space="preserve"><value>Noch nicht analysiert</value></data>
+  <data name="Storage_NotAnalyzedHint" xml:space="preserve"><value>Dieses Laufwerk wurde noch nicht analysiert. Mit „Analysieren“ wird es vollständig durchlaufen. Dabei werden nur Ordnerlisten gelesen, nichts wird verändert, und es kann einige Minuten dauern. Das Ergebnis bleibt im Arbeitsspeicher, bis Sie dieses Fenster schließen.</value></data>
+  <data name="Storage_NoServerAccess" xml:space="preserve"><value>Zahlen aus dem Verzeichnis, auf den Server wird nicht zugegriffen.</value></data>
+  <data name="Storage_ShareNeverScanned" xml:space="preserve"><value>Diese Freigabe wurde noch nicht durchlaufen, deshalb gibt es keine Zahlen.</value></data>
+  <data name="Storage_ShareAsOf" xml:space="preserve"><value>Stand des letzten Durchlaufs: {0}.</value></data>
+  <data name="Storage_ShareAsOfPartial" xml:space="preserve"><value>Stand des letzten Durchlaufs: {0}. Dieser Durchlauf wurde nicht abgeschlossen, die Zahlen können unvollständig sein.</value></data>
+  <data name="Storage_ShareErrors" xml:space="preserve"><value>{0:N0} Ordner konnten bei diesem Durchlauf nicht gelesen werden.</value></data>
+  <data name="Storage_ShareTotal" xml:space="preserve"><value>{0} in {1:N0} Dateien</value></data>
+  <data name="Storage_DriveSpace" xml:space="preserve"><value>{0} belegt von {1} · {2} frei</value></data>
+  <data name="Storage_Select" xml:space="preserve"><value>Wählen Sie ein Laufwerk oder eine Freigabe.</value></data>
+  <data name="Storage_Reading" xml:space="preserve"><value>Das Verzeichnis wird gelesen …</value></data>
+  <data name="Storage_Working" xml:space="preserve"><value>Das Laufwerk wird analysiert. Sie können das Programm weiter benutzen; „Abbrechen“ beendet die Analyse.</value></data>
+  <data name="Storage_ReadFailed" xml:space="preserve"><value>Das Verzeichnis konnte nicht gelesen werden: {0}</value></data>
+  <data name="Storage_ItemAnalyzed" xml:space="preserve"><value>Analysiert {0} · {1:N0} Dateien</value></data>
+  <data name="Storage_Scanning" xml:space="preserve"><value>{0} wird analysiert: bisher {1:N0} Ordner, {2:N0} Dateien, {3}</value></data>
+  <data name="Storage_ScanDone" xml:space="preserve"><value>{0} analysiert {1}: {2:N0} Dateien in {3:N0} Ordnern, {4} gelesen.</value></data>
+  <data name="Storage_ScanErrors" xml:space="preserve"><value>{0:N0} Ordner konnten nicht gelesen werden und fehlen in den Zahlen; siehe die Zeile „Nicht lesbar oder Systembereich“.</value></data>
+  <data name="Storage_ScanCancelled" xml:space="preserve"><value>Die Analyse wurde abgebrochen; die unvollständigen Zahlen wurden verworfen.</value></data>
+  <data name="Storage_ScanUnreachable" xml:space="preserve"><value>Das Laufwerk konnte nicht gelesen werden.</value></data>
+  <data name="Storage_ScanFailed" xml:space="preserve"><value>Die Analyse ist fehlgeschlagen: {0}</value></data>
+  <data name="Storage_Unreadable" xml:space="preserve"><value>Nicht lesbar oder Systembereich</value></data>
+  <data name="Storage_UnreadableTip" xml:space="preserve"><value>Belegter Platz laut Laufwerk abzüglich der gelesenen Dateien: Ordner ohne Berechtigung, Systemdateien und Verwaltungsdaten.</value></data>
+  <data name="Storage_NoteUnreadableCount" xml:space="preserve"><value>{0:N0} Ordner konnten nicht gelesen werden</value></data>
+  <data name="Storage_NoteLink" xml:space="preserve"><value>Verknüpfung, nicht betreten</value></data>
+  <data name="Storage_NoteUnreadable" xml:space="preserve"><value>nicht lesbar</value></data>
+  <data name="Storage_NoteCloud" xml:space="preserve"><value>{0:N0} Dateien nur in der Cloud, nicht mitgezählt ({1})</value></data>
+  <data name="Storage_ActionFailed" xml:space="preserve"><value>Die Aktion ist fehlgeschlagen: {0}</value></data>
+  <data name="Storage_Copied" xml:space="preserve"><value>Pfad kopiert.</value></data>
+  <data name="Storage_CopyFailed" xml:space="preserve"><value>Der Pfad konnte nicht kopiert werden, die Zwischenablage ist belegt.</value></data>
+  <data name="Storage_ConfirmFolder" xml:space="preserve"><value>Den Ordner {0} mit {1:N0} Dateien ({2}) in den Papierkorb verschieben? Sie können ihn von dort wiederherstellen. Der Platz wird erst frei, wenn der Papierkorb geleert wird.</value></data>
+  <data name="Storage_ConfirmFile" xml:space="preserve"><value>Die Datei {0} ({1}) in den Papierkorb verschieben? Sie können sie von dort wiederherstellen. Der Platz wird erst frei, wenn der Papierkorb geleert wird.</value></data>
+  <data name="Storage_Recycled" xml:space="preserve"><value>In den Papierkorb verschoben: {0}</value></data>
+  <data name="Storage_RecycleFailed" xml:space="preserve"><value>Es konnte nicht in den Papierkorb verschoben werden: {0}</value></data>
 </root>

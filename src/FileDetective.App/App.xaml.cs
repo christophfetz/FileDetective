@@ -19,6 +19,7 @@ public partial class App : System.Windows.Application
     private AppServices? _services;
     private FirstRunWindow? _firstRun;
     private SettingsWindow? _settingsWindow;
+    private StorageWindow? _storageWindow;
     private UpdateController? _updates;
     private Forms.ToolStripMenuItem? _updateItem;
     private Mutex? _runningMarker;
@@ -388,6 +389,26 @@ public partial class App : System.Windows.Application
         window.ShowInFront();
     }
 
+    /// <summary>Opens the storage space window (PLAN.md 11.1), or brings the open one to the front.</summary>
+    private void OpenStorage()
+    {
+        if (_services is null)
+        {
+            return;
+        }
+
+        if (_storageWindow is not null)
+        {
+            _storageWindow.ShowInFront();
+            return;
+        }
+
+        var window = new StorageWindow(_services);
+        _storageWindow = window;
+        window.Closed += (_, _) => _storageWindow = null;
+        window.ShowInFront();
+    }
+
     private void CreateTrayIcon()
     {
         var menu = new Forms.ContextMenuStrip();
@@ -396,6 +417,8 @@ public partial class App : System.Windows.Application
         search.Click += (_, _) => ShowSearch();
         var update = new Forms.ToolStripMenuItem(Strings.Get("Menu_UpdateNow"));
         update.Click += (_, _) => _index?.StartScanAll();
+        var storageItem = new Forms.ToolStripMenuItem(Strings.Get("Menu_Storage"));
+        storageItem.Click += (_, _) => OpenStorage();
         var settingsItem = new Forms.ToolStripMenuItem(Strings.Get("Menu_Settings"));
         settingsItem.Click += (_, _) => OpenSettings(SettingsSection.Locations);
         _statusItem = new Forms.ToolStripMenuItem(Strings.Get("Tray_StatusLoading")) { Enabled = false };
@@ -407,6 +430,7 @@ public partial class App : System.Windows.Application
 
         menu.Items.Add(search);
         menu.Items.Add(update);
+        menu.Items.Add(storageItem);
         menu.Items.Add(settingsItem);
         menu.Items.Add(_updateItem);
         menu.Items.Add(_statusItem);
@@ -602,6 +626,7 @@ public partial class App : System.Windows.Application
 
         _firstRun?.Close();
         _settingsWindow?.Close();
+        _storageWindow?.Close();
         _bar?.Close();
         _index?.Dispose();
         _index = null;
