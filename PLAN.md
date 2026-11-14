@@ -378,7 +378,7 @@ Linksklick öffnet die Suchleiste. Menü: Suchen, Jetzt aktualisieren, Einstellu
 | Enter, Doppelklick | öffnen (`Process.Start` mit `UseShellExecute`) |
 | Strg+Enter | im Explorer zeigen (`SHOpenFolderAndSelectItems`) |
 | Strg+C | Pfad kopieren, sofern im Eingabefeld kein Text markiert ist |
-| Tab, Umschalt+Tab | Modus Alles → Dateien → Ordner |
+| Tab, Umschalt+Tab | Modus Alles → Dateien → Ordner → Programme |
 | Esc | schließen |
 | Rechtsklick | Menü: Öffnen, Im Explorer zeigen, Pfad kopieren |
 

@@ -125,12 +125,15 @@ public class BarStateTests
         => Assert.Equal(expected, BarState.Resolve(loaded, scanning, everCompleted));
 
     [Fact]
-    public void CycleMode_GoesAllFilesFoldersAndAround()
+    public void CycleMode_GoesAllFilesFoldersProgramsAndAround()
     {
         Assert.Equal(SearchMode.Files, BarState.CycleMode(SearchMode.All, false));
         Assert.Equal(SearchMode.Folders, BarState.CycleMode(SearchMode.Files, false));
-        Assert.Equal(SearchMode.All, BarState.CycleMode(SearchMode.Folders, false));
-        Assert.Equal(SearchMode.Folders, BarState.CycleMode(SearchMode.All, true));
+        Assert.Equal(SearchMode.Programs, BarState.CycleMode(SearchMode.Folders, false));
+        Assert.Equal(SearchMode.All, BarState.CycleMode(SearchMode.Programs, false));
+        Assert.Equal(SearchMode.Programs, BarState.CycleMode(SearchMode.All, true));
+        Assert.Equal(SearchMode.Folders, BarState.CycleMode(SearchMode.Programs, true));
+        Assert.Equal(SearchMode.Files, BarState.CycleMode(SearchMode.Folders, true));
         Assert.Equal(SearchMode.All, BarState.CycleMode(SearchMode.Files, true));
     }
 }

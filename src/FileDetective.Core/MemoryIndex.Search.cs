@@ -16,6 +16,9 @@ public sealed partial class MemoryIndex
     private const ushort StateDead = 0x200;
     private const ushort StateInProgress = 0x400;
 
+    // Inherited like the mask, only in mode Programs: the folder or one of its ancestors is a build or package folder.
+    private const ushort StateTechnical = 0x800;
+
     /// <summary>
     /// Finds all entries for which every term occurs in the own name or in the name of an ancestor folder,
     /// filtered by type filters and mode, and returns the best <paramref name="maxResults"/> in rank order
@@ -44,12 +47,20 @@ public sealed partial class MemoryIndex
             int length = _maxId + 1;
             byte[] dirOwn = ArrayPool<byte>.Shared.Rent(length);
             ushort[] state = ArrayPool<ushort>.Shared.Rent(length);
+
+            // Only mode Programs needs to know which folders are build or package folders.
+            byte[]? dirTechnical = query.Mode == SearchMode.Programs ? ArrayPool<byte>.Shared.Rent(length) : null;
             try
             {
                 Array.Clear(dirOwn, 0, length);
                 Array.Clear(state, 0, length);
+                if (dirTechnical is not null)
+                {
+                    Array.Clear(dirTechnical, 0, length);
+                }
+
                 var ctx = new SearchContext(
-                    _blocks, _segments, _maxId, query, usage ?? NoUsage.Instance, dirOwn, state,
+                    _blocks, _segments, _maxId, query, usage ?? NoUsage.Instance, dirOwn, dirTechnical, state,
                     Math.Max(PerThreadBestCount, maxResults));
 
                 // Worker threads read the structure without taking the lock themselves: this thread holds the
@@ -99,6 +110,10 @@ public sealed partial class MemoryIndex
             {
                 ArrayPool<byte>.Shared.Return(dirOwn);
                 ArrayPool<ushort>.Shared.Return(state);
+                if (dirTechnical is not null)
+                {
+                    ArrayPool<byte>.Shared.Return(dirTechnical);
+                }
             }
         }
         finally
@@ -155,6 +170,53 @@ public sealed partial class MemoryIndex
         }
 
         return false;
+    }
+
+    private static readonly byte[] ExeEnding = ".exe"u8.ToArray();
+
+    /// <summary>Names of build and package folders in search form (shared with the duplicates filter).</summary>
+    private static readonly byte[][] TechnicalFolderNameBytes =
+        [.. DuplicateFilter.TechnicalFolderNames.Select(SearchNormalizer.Normalize)];
+
+    /// <summary>
+    /// True if a folder name (search form) is a build or package folder. A root entry carries the whole path of its
+    /// location, so only its last part counts.
+    /// </summary>
+    internal static bool IsTechnicalFolderName(ReadOnlySpan<byte> name, bool isRootEntry)
+    {
+        if (isRootEntry)
+        {
+            name = name.TrimEnd((byte)'\\').TrimEnd((byte)'/');
+            int cut = name.LastIndexOfAny((byte)'\\', (byte)'/');
+            if (cut >= 0)
+            {
+                name = name[(cut + 1)..];
+            }
+        }
+
+        foreach (var folder in TechnicalFolderNameBytes)
+        {
+            if (name.SequenceEqual(folder))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// True if a file fits mode Programs (PLAN.md 6.4): a program or shortcut name, and not an <c>.exe</c> below a build
+    /// or package folder.
+    /// </summary>
+    internal static bool IsProgramForMode(ReadOnlySpan<byte> name, bool belowTechnicalFolder)
+        => IsProgramName(name) && !(belowTechnicalFolder && name.EndsWith(ExeEnding));
+
+    /// <summary>Same rule as <see cref="IsProgramForMode"/> for a full path (used for the recently opened list).</summary>
+    public static bool IsProgramPath(string fullPath)
+    {
+        ArgumentNullException.ThrowIfNull(fullPath);
+        return IsProgramForMode(SearchNormalizer.Normalize(Path.GetFileName(fullPath)), DuplicateFilter.IsBelowTechnicalFolder(fullPath));
     }
 
     /// <summary>Orders better matches first. Total order: the entry id decides the last tie.</summary>
@@ -299,13 +361,15 @@ public sealed partial class MemoryIndex
         private readonly SearchMode _mode;
         private readonly IUsageLookup _usage;
         private readonly byte[] _dirOwn;
+        private readonly byte[]? _dirTechnical;
         private readonly ushort[] _state;
         private readonly int _fullMask;
 
         public SearchContext(
             EntryRec[]?[] blocks, byte[][] segments, int maxId, SearchQuery query, IUsageLookup usage,
-            byte[] dirOwn, ushort[] state, int perThreadCapacity)
+            byte[] dirOwn, byte[]? dirTechnical, ushort[] state, int perThreadCapacity)
         {
+            _dirTechnical = dirTechnical;
             _blocks = blocks;
             _segments = segments;
             _maxId = maxId;
@@ -339,7 +403,12 @@ public sealed partial class MemoryIndex
                 ref readonly EntryRec r = ref block[id & BlockMask];
                 if ((r.Flags & (EntryFlags.Present | EntryFlags.Deleted | EntryFlags.IsDir)) == (EntryFlags.Present | EntryFlags.IsDir))
                 {
-                    _dirOwn[id] = (byte)OwnMask(Name(r), _fullMask);
+                    var name = Name(r);
+                    _dirOwn[id] = (byte)OwnMask(name, _fullMask);
+                    if (_dirTechnical is not null && IsTechnicalFolderName(name, (r.Flags & EntryFlags.RootEntry) != 0))
+                    {
+                        _dirTechnical[id] = 1;
+                    }
                 }
             }
         }
@@ -433,6 +502,10 @@ public sealed partial class MemoryIndex
                 if (result != StateDead)
                 {
                     result |= _dirOwn[id];
+                    if (_dirTechnical is not null && _dirTechnical[id] != 0)
+                    {
+                        result |= StateTechnical;
+                    }
                 }
 
                 _state[id] = (ushort)result;
@@ -458,7 +531,7 @@ public sealed partial class MemoryIndex
                 }
 
                 bool isDir = (flags & EntryFlags.IsDir) != 0;
-                if ((_mode == SearchMode.Files && isDir) || (_mode == SearchMode.Folders && !isDir))
+                if ((isDir && (_mode == SearchMode.Files || _mode == SearchMode.Programs)) || (_mode == SearchMode.Folders && !isDir))
                 {
                     continue;
                 }
@@ -471,6 +544,11 @@ public sealed partial class MemoryIndex
 
                 var name = Name(r);
                 if (_filters.Length > 0 && !EndsWithAny(name, _filters))
+                {
+                    continue;
+                }
+
+                if (_mode == SearchMode.Programs && !IsProgramForMode(name, (parentState & StateTechnical) != 0))
                 {
                     continue;
                 }

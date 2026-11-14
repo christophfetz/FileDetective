@@ -67,6 +67,7 @@ internal sealed partial class SearchBarViewModel : ObservableObject
     {
         SearchMode.Files => "Mode_Files",
         SearchMode.Folders => "Mode_Folders",
+        SearchMode.Programs => "Mode_Programs",
         _ => "Mode_All",
     });
 

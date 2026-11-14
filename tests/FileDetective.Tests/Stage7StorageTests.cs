@@ -504,6 +504,38 @@ public class Stage7StorageTests : IDisposable
         Assert.Equal([@"C:\u\Docs"], engine.RecentlyOpened(SearchMode.Folders).Hits.Select(h => h.Details.FullPath).ToArray());
         Assert.Equal(2, engine.RecentlyOpened(SearchMode.All, 2).Hits.Count);
         Assert.Equal(3, engine.RecentlyOpened(SearchMode.All).TotalCount);
+        Assert.Empty(engine.RecentlyOpened(SearchMode.Programs).Hits);
+    }
+
+    [Fact]
+    public void RecentlyOpened_ModePrograms_OnlyPrograms()
+    {
+        var clock = new ManualClock(new DateTimeOffset(2026, 11, 1, 10, 0, 0, TimeSpan.Zero));
+        using var f = NewFixture();
+        var usage = new UsageTracker(f.Db, f.Store, clock);
+        var engine = new SearchEngine(f.Index, new DatabaseEntryResolver(f.Db), usage);
+        var root = f.Store.AddRoot(@"C:\u", null, RootKind.Local);
+        int tools = f.Add(root, root.RootEntryId, "Tools", true);
+        f.Add(root, tools, "App.lnk", false);
+        f.Add(root, tools, "App.exe", false);
+        f.Add(root, tools, "Notes.txt", false);
+        int bin = f.Add(root, tools, "bin", true);
+        f.Add(root, bin, "Build.exe", false);
+        f.Add(root, bin, "Build.lnk", false);
+
+        foreach (var path in new[]
+        {
+            @"C:\u\Tools\App.lnk", @"C:\u\Tools\App.exe", @"C:\u\Tools\Notes.txt", @"C:\u\Tools",
+            @"C:\u\Tools\bin\Build.exe", @"C:\u\Tools\bin\Build.lnk",
+        })
+        {
+            usage.RecordOpen(path);
+            clock.Advance(TimeSpan.FromMinutes(1));
+        }
+
+        Assert.Equal(
+            [@"C:\u\Tools\bin\Build.lnk", @"C:\u\Tools\App.exe", @"C:\u\Tools\App.lnk"],
+            engine.RecentlyOpened(SearchMode.Programs).Hits.Select(h => h.Details.FullPath).ToArray());
     }
 
     [Fact]

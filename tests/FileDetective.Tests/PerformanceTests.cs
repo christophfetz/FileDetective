@@ -25,7 +25,7 @@ public class PerformanceTests(ITestOutputHelper output)
         "bestellung", "archiv", "Übersicht", "konzept", "handbuch", "liste", "auswertung", "meier", "café",
     ];
 
-    private static readonly string[] Extensions = [".pdf", ".docx", ".xlsx", ".txt", ".jpg", ".msg", ".pptx", ".zip"];
+    private static readonly string[] Extensions = [".pdf", ".docx", ".xlsx", ".txt", ".jpg", ".msg", ".pptx", ".zip", ".exe", ".lnk"];
 
     [Fact]
     public void Search_OneMillionEntries_MeetsTarget()
@@ -41,14 +41,19 @@ public class PerformanceTests(ITestOutputHelper output)
         using var fourCores = Build(4);
         using var allCores = Build(-1);
 
-        string[] queries = ["angebot müller", "bericht 2024 .pdf", "e", "projekt", "\"liste 1\"", "xyzzy"];
+        (string Input, SearchMode Mode)[] queries =
+        [
+            ("angebot müller", SearchMode.All), ("bericht 2024 .pdf", SearchMode.All), ("e", SearchMode.All),
+            ("projekt", SearchMode.All), ("\"liste 1\"", SearchMode.All), ("xyzzy", SearchMode.All),
+            ("e", SearchMode.Programs), ("projekt .lnk", SearchMode.Programs),
+        ];
         double worst4 = 0;
-        foreach (var q in queries)
+        foreach (var (q, mode) in queries)
         {
-            var (median4, total) = Measure(fourCores, q);
-            var (medianAll, _) = Measure(allCores, q);
+            var (median4, total) = Measure(fourCores, q, mode);
+            var (medianAll, _) = Measure(allCores, q, mode);
             worst4 = Math.Max(worst4, median4);
-            output.WriteLine($"{q,-22} hits {total,9:N0}   4 threads {median4,6:F1} ms   {Environment.ProcessorCount} threads {medianAll,6:F1} ms");
+            output.WriteLine($"{q,-22} {mode,-8} hits {total,9:N0}   4 threads {median4,6:F1} ms   {Environment.ProcessorCount} threads {medianAll,6:F1} ms");
         }
 
         output.WriteLine($"Worst median on 4 threads: {worst4:F1} ms (limit {limit} ms, logical processors {Environment.ProcessorCount})");
@@ -61,9 +66,9 @@ public class PerformanceTests(ITestOutputHelper output)
     private const bool IsDebugBuild = false;
 #endif
 
-    private static (double MedianMs, int Total) Measure(MemoryIndex index, string input)
+    private static (double MedianMs, int Total) Measure(MemoryIndex index, string input, SearchMode mode)
     {
-        var query = SearchQuery.Parse(input);
+        var query = SearchQuery.Parse(input, mode);
         int total = 0;
         for (int i = 0; i < 3; i++)
         {

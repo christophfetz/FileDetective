@@ -8,6 +8,12 @@ public enum SearchMode
     All,
     Files,
     Folders,
+
+    /// <summary>
+    /// Only files ending in <c>.lnk</c>, <c>.appref-ms</c>, <c>.url</c> or <c>.exe</c>; an <c>.exe</c> below a build or
+    /// package folder (<see cref="DuplicateFilter.TechnicalFolderNames"/>) does not count (PLAN.md 6.4).
+    /// </summary>
+    Programs,
 }
 
 /// <summary>

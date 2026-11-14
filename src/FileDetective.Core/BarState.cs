@@ -30,7 +30,7 @@ public static class BarState
         return scanPendingOrRunning && !anyScanEverCompleted ? IndexPhase.FirstScan : IndexPhase.Ready;
     }
 
-    /// <summary>Next mode for Tab (<paramref name="reverse"/> false) or Shift+Tab: All, Files, Folders, then around.</summary>
+    /// <summary>Next mode for Tab (<paramref name="reverse"/> false) or Shift+Tab: All, Files, Folders, Programs, then around.</summary>
     public static SearchMode CycleMode(SearchMode mode, bool reverse)
     {
         int count = Enum.GetValues<SearchMode>().Length;

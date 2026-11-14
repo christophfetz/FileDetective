@@ -99,6 +99,94 @@ public class MatchingTests
         Assert.Equal(["Projekt Alpha"], t.Names("alpha", SearchMode.Folders));
     }
 
+    private static TestTree ProgramSample()
+    {
+        var t = new TestTree();
+        t.Root(1, @"C:\Users\anna");
+        t.Dir(2, 1, "Tools");
+        t.File(3, 2, "Claude.lnk");
+        t.File(4, 2, "Claude.exe");
+        t.File(5, 2, "Claude.url");
+        t.File(6, 2, "Claude.appref-ms");
+        t.File(7, 2, "CLAUDE.md");
+        t.Dir(8, 2, "Claude Folder");
+        t.Dir(9, 2, "Source");
+        t.Dir(10, 9, "bin");
+        t.Dir(11, 10, "Debug");
+        t.File(12, 11, "claude.exe");
+        t.File(13, 11, "claude.lnk");
+        t.Dir(14, 9, "obj");
+        t.File(15, 14, "claude.exe");
+        t.Dir(16, 9, ".nuget");
+        t.File(17, 16, "claude.exe");
+        t.File(18, 9, "claude.exe.config");
+        t.File(19, 2, ".exe");
+        return t;
+    }
+
+    [Fact]
+    public void ModePrograms_OnlyProgramFiles_NoFolders()
+    {
+        using var t = ProgramSample();
+        Assert.Equal(
+            ["Claude.appref-ms", "Claude.exe", "Claude.lnk", "Claude.url", "claude.lnk"],
+            t.Names("claude", SearchMode.Programs).Order(StringComparer.Ordinal));
+        Assert.Contains("CLAUDE.md", t.Names("claude", SearchMode.All));
+        Assert.Contains("Claude Folder", t.Names("claude", SearchMode.All));
+    }
+
+    [Fact]
+    public void ModePrograms_ExeBelowBuildFolder_IsLeftOut_ShortcutStays()
+    {
+        using var t = ProgramSample();
+        var hits = t.Names("debug", SearchMode.Programs);
+        Assert.Equal(["claude.lnk"], hits);
+        Assert.Empty(t.Names("obj", SearchMode.Programs));
+        Assert.Empty(t.Names("nuget", SearchMode.Programs));
+        Assert.Equal(2, t.Names("debug claude", SearchMode.Files).Length);
+    }
+
+    [Fact]
+    public void ModePrograms_LocationItselfIsBuildFolder_ExeIsLeftOut()
+    {
+        using var t = new TestTree();
+        t.Root(1, @"D:\Projects\App\bin");
+        t.File(2, 1, "app.exe");
+        t.File(3, 1, "app.lnk");
+        Assert.Equal(["app.lnk"], t.Names("app", SearchMode.Programs));
+        Assert.Equal(2, t.Names("app", SearchMode.Files).Length);
+    }
+
+    [Fact]
+    public void ModePrograms_TypeFilterStillApplies()
+    {
+        using var t = ProgramSample();
+        Assert.Equal(["Claude.lnk", "claude.lnk"], t.Names("claude .lnk", SearchMode.Programs).Order(StringComparer.Ordinal));
+        Assert.Empty(t.Names("claude .md", SearchMode.Programs));
+        Assert.Equal(["Claude.exe"], t.Names(".exe", SearchMode.Programs));
+    }
+
+    [Fact]
+    public void ModePrograms_RenamedBuildFolder_CountsAgain()
+    {
+        using var t = ProgramSample();
+        Assert.DoesNotContain("claude.exe", t.Names("source claude", SearchMode.Programs));
+        t.Rename(10, "Release Build"); // was "bin"
+        Assert.Contains("claude.exe", t.Names("source claude", SearchMode.Programs));
+    }
+
+    [Theory]
+    [InlineData(@"C:\Users\anna\Desktop\Claude.lnk", true)]
+    [InlineData(@"C:\Tools\claude.exe", true)]
+    [InlineData(@"C:\Src\bin\Debug\claude.exe", false)]
+    [InlineData(@"C:\Src\BIN\Debug\claude.lnk", true)]
+    [InlineData(@"C:\Src\packages\x\tool.exe", false)]
+    [InlineData(@"C:\Users\anna\Links\Site.url", true)]
+    [InlineData(@"C:\Users\anna\CLAUDE.md", false)]
+    [InlineData(@"C:\Users\anna\bin.exe", true)]
+    public void IsProgramPath_FollowsModeRule(string path, bool expected)
+        => Assert.Equal(expected, MemoryIndex.IsProgramPath(path));
+
     [Fact]
     public void MoreThanEightTerms_NinthIsIgnored()
     {

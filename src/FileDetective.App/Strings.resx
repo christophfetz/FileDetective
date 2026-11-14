@@ -23,6 +23,7 @@
   <data name="Mode_All" xml:space="preserve"><value>All</value></data>
   <data name="Mode_Files" xml:space="preserve"><value>Files</value></data>
   <data name="Mode_Folders" xml:space="preserve"><value>Folders</value></data>
+  <data name="Mode_Programs" xml:space="preserve"><value>Programs</value></data>
   <data name="Footer_Loading" xml:space="preserve"><value>Loading directory…</value></data>
   <data name="Footer_FirstScan" xml:space="preserve"><value>First scan running: {0:N0} entries</value></data>
   <data name="Footer_Idle" xml:space="preserve"><value>Type to search · Esc close</value></data>

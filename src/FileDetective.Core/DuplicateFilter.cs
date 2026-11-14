@@ -30,6 +30,13 @@ public static class DuplicateFilter
             return true;
         }
 
+        return IsBelowTechnicalFolder(fullPath);
+    }
+
+    /// <summary>True if some folder above the entry is named like one of <see cref="TechnicalFolderNames"/>.</summary>
+    public static bool IsBelowTechnicalFolder(string fullPath)
+    {
+        ArgumentNullException.ThrowIfNull(fullPath);
         string[] parts = fullPath.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
         for (int i = 0; i < parts.Length - 1; i++)
         {

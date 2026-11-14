@@ -56,8 +56,7 @@ public sealed class SearchEngine
             var hits = new List<SearchHit>(Math.Min(max, ids.Count));
             for (int i = 0; i < ids.Count && hits.Count < max; i++)
             {
-                if (details[i] is { } d
-                    && (mode == SearchMode.All || (mode == SearchMode.Folders) == d.IsDirectory))
+                if (details[i] is { } d && FitsMode(d, mode))
                 {
                     hits.Add(new SearchHit(ids[i], d, 0, 0));
                 }
@@ -71,6 +70,14 @@ public sealed class SearchEngine
             take *= 4;
         }
     }
+
+    private static bool FitsMode(EntryDetails d, SearchMode mode) => mode switch
+    {
+        SearchMode.Files => !d.IsDirectory,
+        SearchMode.Folders => d.IsDirectory,
+        SearchMode.Programs => !d.IsDirectory && MemoryIndex.IsProgramPath(d.FullPath),
+        _ => true,
+    };
 
     /// <summary>Searches for an already parsed query.</summary>
     public SearchResult Search(SearchQuery query, CancellationToken cancellationToken = default)
