@@ -234,12 +234,12 @@ Jede Eingabeänderung startet nach 30 ms Ruhe eine Suche im Thread-Pool und bric
 |---|---|
 | Suche über 1 Mio. Einträge | unter 50 ms je Eingabe auf 4 Kernen |
 | Suchleiste erscheint nach Tastenkürzel | unter 100 ms |
-| Arbeitsspeicher | rund 100 MB Grundlast (.NET und WPF) plus rund 45 MB je 1 Mio. Einträge |
+| Arbeitsspeicher | rund 100 MB Grundlast (.NET und WPF) plus rund 45 MB je 1 Mio. Einträge (gemessen in Etappe 7: rund 65 MB je 1 Mio.) |
 | Prozessorlast im Leerlauf | praktisch 0 |
 | Erster Durchlauf lokal, 500.000 Einträge, SSD | unter 3 Minuten |
 | Laden beim Start | rund 1 Mio. Einträge je Sekunde |
 
-Der Arbeitsspeicher wächst mit der Zahl der Einträge. Ein kompletter Firmen-Fileshare mit 10 Mio. Dateien würde rund 450 MB belegen. Die Ortsauswahl empfiehlt deshalb, von großen Freigaben nur die benötigten Unterordner aufzunehmen, und zeigt nach dem Durchlauf die Zahl der Einträge je Ort.
+Der Arbeitsspeicher wächst mit der Zahl der Einträge. Ein kompletter Firmen-Fileshare mit 10 Mio. Dateien würde nach der Messung rund 650 MB belegen. Die Ortsauswahl empfiehlt deshalb, von großen Freigaben nur die benötigten Unterordner aufzunehmen, und zeigt nach dem Durchlauf die Zahl der Einträge je Ort.
 
 ## 7. Durchlauf der Orte
 
