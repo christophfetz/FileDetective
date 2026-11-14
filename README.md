@@ -17,8 +17,8 @@ of your files.
 
 ## Download
 
-Get the latest version from the [Releases page](https://github.com/OWNER/FileDetective/releases/latest)
-(`OWNER` is a placeholder until the project is published). Each release has two downloads:
+Get the latest version from the [Releases page](https://github.com/christophfetz/FileDetective/releases/latest).
+Each release has two downloads:
 
 | File | What it is |
 |---|---|

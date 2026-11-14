@@ -63,14 +63,23 @@ public class UpdateCheckerTests : IDisposable
         => new(new DateTimeOffset(2026, 11, day, hour, 0, 0, TimeSpan.Zero), ManualTimeProvider.UtcPlusOne);
 
     [Fact]
+    public void ConfiguredRepository_IsReal()
+    {
+        Assert.Equal("christophfetz/FileDetective", UpdateChecker.Repository);
+        Assert.True(UpdateChecker.IsRealRepository(UpdateChecker.Repository));
+        Assert.Equal("https://github.com/christophfetz/FileDetective", UpdateChecker.RepositoryUrl);
+        Assert.Equal("https://github.com/christophfetz/FileDetective/releases", UpdateChecker.ReleasesUrl);
+    }
+
+    [Fact]
     public async Task PlaceholderRepository_MakesNoRequest()
     {
-        Assert.False(UpdateChecker.IsRealRepository(UpdateChecker.Repository));
-        Assert.Null(UpdateChecker.RepositoryUrl);
-        Assert.Null(UpdateChecker.ReleasesUrl);
+        const string placeholder = "OWNER/FileDetective";
+        Assert.False(UpdateChecker.IsRealRepository(placeholder));
+        Assert.Null(UpdateChecker.UrlOf(placeholder));
 
         var handler = new FakeHttpHandler(_ => FakeHttpHandler.Json(ReleaseJson("v9.9.9")));
-        using var checker = new UpdateChecker("0.1.0", handler, Clock()); // default repository = the placeholder
+        using var checker = new UpdateChecker("0.1.0", handler, Clock(), repository: placeholder);
         var result = await checker.CheckIfDueAsync(enabled: true);
 
         Assert.Equal(UpdateCheckOutcome.Skipped, result.Outcome);

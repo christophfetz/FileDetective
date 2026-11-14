@@ -60,7 +60,7 @@ Diese Punkte entscheidet der Nutzer, bevor die jeweilige Etappe beginnt.
 | Punkt | Wird gebraucht in | Vorschlag |
 |---|---|---|
 | Name des Rechteinhabers in `LICENSE` | Etappe 0 | Name des Nutzers |
-| GitHub-Konto für das Repository | Etappe 8 | Konto des Nutzers, Konstante `UpdateChecker.Repository` |
+| GitHub-Konto für das Repository | Etappe 8 | Entschieden 2026-11-14: `christophfetz/FileDetective`, Konstante `UpdateChecker.Repository` |
 
 Am 2026-11-13 vom Nutzer bestätigt: der Arbeitsspeicherbedarf nach Abschnitt 6.5, der eigene Komplett-Durchlauf für die lokale Speicherplatz-Analyse nach Abschnitt 11.1 und die Namensgüte in der Rangfolge nach Abschnitt 6.4.
 

@@ -49,11 +49,10 @@ public sealed record UpdateCheckResult(UpdateCheckOutcome Outcome, UpdateInfo? U
 public sealed class UpdateChecker : IDisposable
 {
     /// <summary>
-    /// THE ONE PLACE for the GitHub account and repository. <c>OWNER</c> is a placeholder until the account is decided
-    /// (PLAN.md 4): while it stands here, there is no update check, no link to the repository and no update. Replace
-    /// <c>OWNER</c> with the account name (the download links in <c>README.md</c> use the same placeholder).
+    /// THE ONE PLACE for the GitHub account and repository (the download links in <c>README.md</c> must match). A fork
+    /// that sets the owner back to the placeholder <c>OWNER</c> gets no update check, no link and no update.
     /// </summary>
-    public const string Repository = "OWNER/FileDetective";
+    public const string Repository = "christophfetz/FileDetective";
 
     /// <summary>After a failed attempt the next one comes at the earliest after this time.</summary>
     public static readonly TimeSpan RetryAfterFailure = TimeSpan.FromHours(1);
