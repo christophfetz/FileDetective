@@ -187,6 +187,7 @@ public sealed class DirectorySpaceReader
             if (!folders.TryGetValue(id, out var folder))
             {
                 folders[id] = folder = collector.NewFolder();
+                folder.EntryId = id;
             }
 
             return folder;
@@ -243,6 +244,7 @@ public sealed class StorageAnalysis
     private readonly Func<IndexStore?> _store;
     private readonly DriveDiscovery _drives;
     private readonly LocalSpaceScanner _scanner;
+    private readonly IDirectoryLister _lister;
     private readonly IDriveSpaceSource _space;
 
     /// <param name="store">The index store, null while the directory is not loaded (shares cannot be read then).</param>
@@ -257,9 +259,11 @@ public sealed class StorageAnalysis
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(drives);
         ArgumentNullException.ThrowIfNull(space);
+        ArgumentNullException.ThrowIfNull(lister);
         _store = store;
         _drives = drives;
         _space = space;
+        _lister = lister;
         _scanner = new LocalSpaceScanner(lister, linkDetector, space, time);
     }
 
@@ -283,6 +287,64 @@ public sealed class StorageAnalysis
     {
         var kind = LocalKind(drivePath);
         return _scanner.Scan(drivePath, kind, progress, cancellationToken);
+    }
+
+    /// <summary>
+    /// The files of one folder, for the tree (PLAN.md 11.1): the largest <see cref="FolderFileListing.Limit"/> and the sum of
+    /// the rest. For a share they come from the directory (<see cref="IndexStore.GetKnownChildren"/>) and the
+    /// <see cref="IDirectoryLister"/> is never asked, so there is no access to the server. For a local drive exactly this
+    /// folder is listed (no file is opened); a listing failure is thrown to the caller.
+    /// </summary>
+    public FolderFileListing LoadFiles(SpaceSnapshot snapshot, SpaceFolder folder)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(folder);
+        if (snapshot.Source == SpaceSource.Directory)
+        {
+            if (folder.EntryId is not { } id)
+            {
+                return FolderFileListing.Empty;
+            }
+
+            var store = _store() ?? throw new InvalidOperationException("The directory is not loaded.");
+            return FolderFileListing.Create(
+                store.GetKnownChildren(id)
+                    .Where(k => !k.IsDirectory)
+                    .Select(k => SpaceFile.ForTree(
+                        folder, k.Name, k.Size, k.MTimeUnixSeconds <= 0 ? DateTime.UnixEpoch : DateTimeOffset.FromUnixTimeSeconds(k.MTimeUnixSeconds).UtcDateTime, k.Attributes)));
+        }
+
+        if (snapshot.Kind == RootKind.Network)
+        {
+            throw new InvalidOperationException("Shares are never listed; their files come from the directory.");
+        }
+
+        if (folder.IsLink)
+        {
+            return FolderFileListing.Empty; // links are never entered
+        }
+
+        return FolderFileListing.Create(
+            _lister.List(folder.FullPath)
+                .Where(e => !e.IsDirectory)
+                .Select(e => SpaceFile.ForTree(folder, e.Name, e.Size, e.LastWriteUtc, e.Attributes)));
+    }
+
+    /// <summary>
+    /// A fresh local walk of one folder of a live snapshot (the Recycle Bin after it was emptied); a local run of just that
+    /// subtree. Apply it with <see cref="SpaceSnapshot.ReplaceFolder"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The snapshot is not from a local walk.</exception>
+    public SpaceSnapshot ScanFolder(SpaceSnapshot snapshot, SpaceFolder folder, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(folder);
+        if (!snapshot.IsLocal || snapshot.Kind == RootKind.Network)
+        {
+            throw new InvalidOperationException("Only folders of a local walk are listed again.");
+        }
+
+        return _scanner.Scan(folder.FullPath, snapshot.Kind, null, cancellationToken);
     }
 
     /// <summary>Used and free space of a local or removable drive; null for network drives (never asked) and unknown drives.</summary>
@@ -321,12 +383,41 @@ public interface IRecycleBin
     void MoveDirectory(string path);
 }
 
+/// <summary>How an attempt to empty the Recycle Bin of a drive ended.</summary>
+public enum RecycleBinEmptyResult
+{
+    /// <summary>Windows emptied the bin (or it was already empty).</summary>
+    Emptied,
+
+    /// <summary>The user said No in the dialog of Windows; nothing changed.</summary>
+    Cancelled,
+}
+
+/// <summary>Empties the Recycle Bin of one drive. The real one is <see cref="SystemRecycleBin"/>; tests use a stand-in.</summary>
+public interface IRecycleBinEmptier
+{
+    /// <summary>
+    /// Asks Windows to empty the Recycle Bin of <paramref name="driveRoot"/> (for example <c>C:\</c>). Windows asks the
+    /// user itself. <paramref name="ownerWindow"/> is the handle of the window that owns the dialog (0: none).
+    /// </summary>
+    /// <exception cref="System.ComponentModel.Win32Exception">Windows reported a failure.</exception>
+    RecycleBinEmptyResult Empty(string driveRoot, nint ownerWindow);
+}
+
 /// <summary>
 /// Real <see cref="IRecycleBin"/>: <c>Microsoft.VisualBasic.FileIO.FileSystem</c> with <c>RecycleOption.SendToRecycleBin</c>
-/// (part of .NET, no package). Shows only error dialogs.
+/// (part of .NET, no package). Shows only error dialogs. As <see cref="IRecycleBinEmptier"/> it calls
+/// <c>SHEmptyRecycleBin</c> of Windows for one drive, without <c>SHERB_NOCONFIRMATION</c>: Windows asks the user and
+/// shows its own progress and sound.
 /// </summary>
-public sealed class SystemRecycleBin : IRecycleBin
+public sealed class SystemRecycleBin : IRecycleBin, IRecycleBinEmptier
 {
+    private const int SOk = 0;
+    private const int SFalse = 1;
+    private const int EAbort = unchecked((int)0x80004004);
+    private const int ErrorCancelledAsHresult = unchecked((int)0x800704C7);
+    private const int EUnexpected = unchecked((int)0x8000FFFF);
+
     public void MoveFile(string path)
         => Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(
             path,
@@ -340,20 +431,109 @@ public sealed class SystemRecycleBin : IRecycleBin
             Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
             Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin,
             Microsoft.VisualBasic.FileIO.UICancelOption.ThrowException);
+
+    public RecycleBinEmptyResult Empty(string driveRoot, nint ownerWindow)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(driveRoot);
+        int hr = SHEmptyRecycleBin(ownerWindow, driveRoot, 0);
+        switch (hr)
+        {
+            case SOk:
+            case SFalse:
+            // Some Windows versions report an already empty bin like this.
+            case EUnexpected:
+                return RecycleBinEmptyResult.Emptied;
+            case EAbort:
+            case ErrorCancelledAsHresult:
+                return RecycleBinEmptyResult.Cancelled;
+            default:
+                throw new System.ComponentModel.Win32Exception(
+                    hr & 0xFFFF,
+                    $"The Recycle Bin could not be emptied (HRESULT 0x{hr:X8}).");
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    [System.Runtime.InteropServices.DefaultDllImportSearchPaths(System.Runtime.InteropServices.DllImportSearchPath.System32)]
+    private static extern int SHEmptyRecycleBin(nint hwnd, string? pszRootPath, uint dwFlags);
 }
 
 /// <summary>
-/// "Move to Recycle Bin" of the storage analysis (PLAN.md 2.9, 11.1). The caller asks the user first; this class only
-/// refuses what must never happen: anything on a share or a removable drive, the top folder, links, and anything that is
-/// not part of the snapshot. It never deletes by itself and never permanently.
+/// "Move to Recycle Bin" and "Empty Recycle Bin" of the storage analysis (PLAN.md 2.9, 11.1). The caller asks the user
+/// first (for the move; Windows asks itself when emptying); this class only refuses what must never happen: anything on a
+/// share or a removable drive, the top folder, links, anything that is not part of the snapshot, and the places that
+/// must never be touched: the Recycle Bin itself and everything in it, <c>System Volume Information</c> and everything in
+/// it, the Windows folder and everything in it. It never deletes by itself and never permanently.
 /// </summary>
-public sealed class SpaceRecycler(IRecycleBin bin)
+/// <param name="bin">Moves to the Recycle Bin.</param>
+/// <param name="windowsDirectory">The Windows folder (<c>Environment.SpecialFolder.Windows</c>); null: none is protected by path.</param>
+/// <param name="emptier">Empties the Recycle Bin of a drive; null: the real <see cref="SystemRecycleBin"/>, or <paramref name="bin"/> if it can do so.</param>
+public sealed class SpaceRecycler(IRecycleBin bin, string? windowsDirectory = null, IRecycleBinEmptier? emptier = null)
 {
+    private readonly string? _windows = string.IsNullOrWhiteSpace(windowsDirectory)
+        ? null
+        : Path.TrimEndingDirectorySeparator(Path.GetFullPath(windowsDirectory));
+
+    private readonly IRecycleBinEmptier _emptier = emptier ?? bin as IRecycleBinEmptier ?? new SystemRecycleBin();
+
     public bool CanRecycle(SpaceSnapshot snapshot, SpaceFolder folder)
-        => snapshot.CanMoveToRecycleBin && folder.Parent is not null && !folder.IsLink && folder.IsSameOrBelow(snapshot.Root);
+        => snapshot.CanMoveToRecycleBin && folder.Parent is not null && !folder.IsLink && folder.IsSameOrBelow(snapshot.Root)
+            && !IsProtected(folder, null);
 
     public bool CanRecycle(SpaceSnapshot snapshot, SpaceFile file)
-        => snapshot.CanMoveToRecycleBin && file.Parent.IsSameOrBelow(snapshot.Root);
+        => snapshot.CanMoveToRecycleBin && file.Parent.IsSameOrBelow(snapshot.Root) && !IsProtected(file.Parent, file.Name);
+
+    /// <summary>
+    /// The Recycle Bin of a local fixed drive can be emptied: <paramref name="folder"/> is the folder <c>$Recycle.Bin</c>
+    /// in the drive root of a local walk. Never for shares and removable drives.
+    /// </summary>
+    public bool CanEmptyRecycleBin(SpaceSnapshot snapshot, SpaceFolder folder)
+        => snapshot.CanMoveToRecycleBin && folder.IsRecycleBin && ReferenceEquals(folder.Parent, snapshot.Root);
+
+    /// <summary>
+    /// Asks Windows to empty the Recycle Bin of the drive of <paramref name="snapshot"/> (for this one drive); Windows asks
+    /// the user. Does not touch the snapshot: call <see cref="StorageAnalysis.ScanFolder"/> and
+    /// <see cref="SpaceSnapshot.ReplaceFolder"/> afterwards when the result is <see cref="RecycleBinEmptyResult.Emptied"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">This is not the Recycle Bin of a local fixed drive.</exception>
+    public RecycleBinEmptyResult EmptyRecycleBin(SpaceSnapshot snapshot, SpaceFolder folder, nint ownerWindow = 0)
+    {
+        if (!CanEmptyRecycleBin(snapshot, folder))
+        {
+            throw new InvalidOperationException("This is not the Recycle Bin of a local drive.");
+        }
+
+        return _emptier.Empty(snapshot.Root.Name, ownerWindow);
+    }
+
+    /// <summary>
+    /// True for what is never moved to the Recycle Bin: the Recycle Bin and anything in it, <c>System Volume
+    /// Information</c> and anything in it, the Windows folder and anything in it.
+    /// </summary>
+    private bool IsProtected(SpaceFolder folder, string? fileName)
+    {
+        for (var f = folder; f is not null; f = f.Parent)
+        {
+            if (f.IsRecycleBin)
+            {
+                return true;
+            }
+
+            if (f.Parent is { Parent: null } && string.Equals(f.Name, SpaceFolder.SystemVolumeInformationName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        if (_windows is null)
+        {
+            return false;
+        }
+
+        string path = Path.TrimEndingDirectorySeparator(fileName is null ? folder.FullPath : Path.Join(folder.FullPath, fileName));
+        return string.Equals(path, _windows, StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith(_windows + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Only the move: checks the rules and moves the folder to the Recycle Bin, without touching the snapshot. For callers

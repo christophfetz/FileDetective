@@ -490,6 +490,413 @@ public class StorageAnalysisTests : IDisposable
         public void MoveDirectory(string path) => throw new IOException("in use");
     }
 
+    // ---------------------------------------------------------------- Recycle Bin line, protected places (user feedback)
+
+    private sealed class FakeEmptier : IRecycleBinEmptier
+    {
+        public List<(string Drive, nint Owner)> Calls { get; } = [];
+
+        public RecycleBinEmptyResult Result { get; set; } = RecycleBinEmptyResult.Emptied;
+
+        public RecycleBinEmptyResult Empty(string driveRoot, nint ownerWindow)
+        {
+            Calls.Add((driveRoot, ownerWindow));
+            return Result;
+        }
+    }
+
+    /// <summary>The sample drive plus a Recycle Bin, System Volume Information and a Windows folder.</summary>
+    private static FakeFileSystem SampleWithSystemFolders()
+    {
+        var fs = Sample();
+        fs.Dir("$Recycle.Bin").Dir(@"$Recycle.Bin\S-1-5-21")
+            .File(@"$Recycle.Bin\S-1-5-21\$R123.iso", 500, 20)
+            .File(@"$Recycle.Bin\S-1-5-21\$R456.zip", 300, 21)
+            .Dir("System Volume Information").File(@"System Volume Information\tracking.log", 90, 22)
+            .Dir("Windows").Dir(@"Windows\System32").File(@"Windows\System32\kernel.dll", 70, 23)
+            .File(@"Windows\notepad.exe", 60, 24)
+            .Dir("WindowsApps").File(@"WindowsApps\app.bin", 50, 25)
+            .Dir(@"Docs\$Recycle.Bin");
+        return fs;
+    }
+
+    [Fact]
+    public void RecycleBinFolder_InTheDriveRoot_IsFlagged_AnyCase_ButNotDeeper()
+    {
+        var fs = SampleWithSystemFolders();
+        fs.Dir("$recycle.bin2").Dir(@"Music\$RECYCLE.BIN");
+
+        var snap = Analysis(fs).ScanLocal(Drive);
+
+        Assert.True(Child(snap.Root, "$Recycle.Bin").IsRecycleBin);
+        Assert.False(Child(snap.Root, "$recycle.bin2").IsRecycleBin);
+        Assert.False(Child(Child(snap.Root, "Docs"), "$Recycle.Bin").IsRecycleBin);
+        Assert.False(Child(Child(snap.Root, "Music"), "$RECYCLE.BIN").IsRecycleBin);
+        Assert.False(snap.Root.IsRecycleBin);
+
+        // not for the directory of a share: there is no Recycle Bin to empty
+        var shareFs = new FakeFileSystem(@"\\server\s");
+        shareFs.Dir("$Recycle.Bin").File(@"$Recycle.Bin\a.bin", 5);
+        var root = _f.Store.AddRoot(@"\\server\s", null, RootKind.Network);
+        new Scanner(_f.Store, shareFs, ExcludeRules.None, new ScannerOptions { Clock = new FakeScanClock(), LinkDetector = new FakeLinkDetector() })
+            .ScanRoot(root.Id);
+        var share = Analysis(shareFs).ReadShare(root.Id);
+        Assert.False(Child(share.Root, "$Recycle.Bin").IsRecycleBin);
+    }
+
+    [Fact]
+    public void CanRecycle_IsAlwaysFalseFor_RecycleBin_SystemVolumeInformation_AndTheWindowsFolder_AndEverythingInThem()
+    {
+        var snap = Analysis(SampleWithSystemFolders()).ScanLocal(Drive);
+        var recycler = new SpaceRecycler(new FakeBin(), @"R:\Windows");
+        var bin = Child(snap.Root, "$Recycle.Bin");
+        var sid = Child(bin, "S-1-5-21");
+        var svi = Child(snap.Root, "System Volume Information");
+        var windows = Child(snap.Root, "Windows");
+        var system32 = Child(windows, "System32");
+
+        // folders
+        Assert.False(recycler.CanRecycle(snap, snap.Root));
+        Assert.False(recycler.CanRecycle(snap, bin));
+        Assert.False(recycler.CanRecycle(snap, sid));
+        Assert.False(recycler.CanRecycle(snap, svi));
+        Assert.False(recycler.CanRecycle(snap, windows));
+        Assert.False(recycler.CanRecycle(snap, system32));
+
+        // files (the largest files hold some of them)
+        SpaceFile Top(string name) => snap.TopFiles.Single(f => f.Name == name);
+        Assert.False(recycler.CanRecycle(snap, Top("$R123.iso")));
+        Assert.False(recycler.CanRecycle(snap, Top("tracking.log")));
+        Assert.False(recycler.CanRecycle(snap, Top("kernel.dll")));
+        Assert.False(recycler.CanRecycle(snap, Top("notepad.exe")));
+        Assert.Throws<InvalidOperationException>(() => recycler.Recycle(snap, system32));
+        Assert.Throws<InvalidOperationException>(() => recycler.Recycle(snap, Top("kernel.dll")));
+
+        // everything else is still allowed, also a folder that only starts with the same letters, and a nested
+        // folder that happens to be called like a system folder
+        Assert.True(recycler.CanRecycle(snap, Child(snap.Root, "Docs")));
+        Assert.True(recycler.CanRecycle(snap, Child(snap.Root, "WindowsApps")));
+        Assert.True(recycler.CanRecycle(snap, Top("app.bin")));
+        Assert.True(recycler.CanRecycle(snap, Top("top.txt")));
+        Assert.True(recycler.CanRecycle(snap, Child(Child(snap.Root, "Docs"), "$Recycle.Bin")));
+    }
+
+    [Fact]
+    public void CanRecycle_WindowsFolder_IsGivenIn_SoTestsCanChooseIt_AndIsNotProtectedWithoutIt()
+    {
+        var snap = Analysis(SampleWithSystemFolders()).ScanLocal(Drive);
+        var windows = Child(snap.Root, "Windows");
+
+        Assert.True(new SpaceRecycler(new FakeBin()).CanRecycle(snap, windows));                 // no folder given
+        Assert.True(new SpaceRecycler(new FakeBin(), @"D:\Windows").CanRecycle(snap, windows));  // another drive
+        Assert.False(new SpaceRecycler(new FakeBin(), @"r:\windows\").CanRecycle(snap, windows)); // case and trailing slash do not matter
+        Assert.False(new SpaceRecycler(new FakeBin(), @"R:\Windows").CanRecycle(snap, Child(windows, "System32")));
+    }
+
+    [Fact]
+    public void EmptyRecycleBin_AsksWindowsForThatDriveOnly_AndNotForOtherFolders_Shares_OrRemovableDrives()
+    {
+        var snap = Analysis(SampleWithSystemFolders()).ScanLocal(Drive);
+        var emptier = new FakeEmptier();
+        var recycler = new SpaceRecycler(new FakeBin(), @"R:\Windows", emptier);
+        var bin = Child(snap.Root, "$Recycle.Bin");
+
+        Assert.True(recycler.CanEmptyRecycleBin(snap, bin));
+        Assert.Equal(RecycleBinEmptyResult.Emptied, recycler.EmptyRecycleBin(snap, bin, 1234));
+
+        Assert.Equal([(Drive, (nint)1234)], emptier.Calls);
+        Assert.Equal(6300 + 500 + 300 + 90 + 70 + 60 + 50, snap.Root.Size); // asking does not change the numbers by itself
+
+        // not for any other folder, the nested namesake, the drive itself, a removable drive
+        Assert.False(recycler.CanEmptyRecycleBin(snap, Child(snap.Root, "Docs")));
+        Assert.False(recycler.CanEmptyRecycleBin(snap, Child(Child(snap.Root, "Docs"), "$Recycle.Bin")));
+        Assert.False(recycler.CanEmptyRecycleBin(snap, snap.Root));
+        Assert.Throws<InvalidOperationException>(() => recycler.EmptyRecycleBin(snap, Child(snap.Root, "Docs")));
+
+        var usb = new FakeFileSystem(@"U:\");
+        usb.Dir("$Recycle.Bin").File(@"$Recycle.Bin\x.bin", 5);
+        var removable = Analysis(usb).ScanLocal(@"U:\");
+        Assert.True(Child(removable.Root, "$Recycle.Bin").IsRecycleBin);
+        Assert.False(recycler.CanEmptyRecycleBin(removable, Child(removable.Root, "$Recycle.Bin")));
+
+        var shareFs = new FakeFileSystem(@"\\server\s");
+        shareFs.Dir("$Recycle.Bin").File(@"$Recycle.Bin\a.bin", 5);
+        var root = _f.Store.AddRoot(@"\\server\s", null, RootKind.Network);
+        new Scanner(_f.Store, shareFs, ExcludeRules.None, new ScannerOptions { Clock = new FakeScanClock(), LinkDetector = new FakeLinkDetector() })
+            .ScanRoot(root.Id);
+        var share = Analysis(shareFs).ReadShare(root.Id);
+        Assert.False(recycler.CanEmptyRecycleBin(share, Child(share.Root, "$Recycle.Bin")));
+
+        Assert.Single(emptier.Calls); // none of the refused attempts reached Windows
+    }
+
+    [Fact]
+    public void EmptyRecycleBin_WhenTheUserDeclines_ReportsIt_AndTheNumbersStay()
+    {
+        var snap = Analysis(SampleWithSystemFolders()).ScanLocal(Drive);
+        var emptier = new FakeEmptier { Result = RecycleBinEmptyResult.Cancelled };
+        var bin = Child(snap.Root, "$Recycle.Bin");
+        long before = snap.Root.Size;
+
+        var result = new SpaceRecycler(new FakeBin(), null, emptier).EmptyRecycleBin(snap, bin);
+
+        Assert.Equal(RecycleBinEmptyResult.Cancelled, result);
+        Assert.Equal(before, snap.Root.Size);
+        Assert.Equal(800, bin.Size);
+    }
+
+    [Fact]
+    public void AfterEmptying_TheBinIsListedAgain_AndTheTotalsOfAllFoldersAboveAreCorrected()
+    {
+        var fs = SampleWithSystemFolders();
+        var space = new FakeSpace(used: 8000);
+        var analysis = Analysis(fs, space);
+        var snap = analysis.ScanLocal(Drive);
+        var bin = Child(snap.Root, "$Recycle.Bin");
+        long rootBefore = snap.Root.Size;
+        Assert.Equal(800, bin.Size);
+        Assert.Contains(snap.TopFiles, f => f.Name == "$R123.iso");
+        long unreadableBefore = snap.UnreadableBytes!.Value;
+
+        // Windows empties the bin (the fake file system stands for the drive); one new file arrived in the meantime
+        fs.Remove(@"$Recycle.Bin\S-1-5-21");
+        fs.Dir(@"$Recycle.Bin\S-1-5-21").File(@"$Recycle.Bin\S-1-5-21\$I1.dat", 40, 30);
+        fs.Calls.Clear();
+        var fresh = analysis.ScanFolder(snap, bin);
+        Assert.Equal([@"R:\$Recycle.Bin", @"R:\$Recycle.Bin\S-1-5-21"], fs.Calls.OrderBy(c => c, StringComparer.Ordinal).ToArray()); // only that subtree
+
+        Assert.True(snap.ReplaceFolder(bin, fresh));
+        snap.RecycleBinWasEmptied(new DriveSpace(FakeSpace.Total, FakeSpace.Total - 7240));
+
+        var newBin = Child(snap.Root, "$Recycle.Bin");
+        Assert.NotSame(bin, newBin);
+        Assert.True(newBin.IsRecycleBin);
+        Assert.Equal("$Recycle.Bin", newBin.Name);
+        Assert.Same(snap.Root, newBin.Parent);
+        Assert.Equal(40, newBin.Size);
+        Assert.Equal(1, newBin.FileCount);
+        Assert.Equal(rootBefore - 800 + 40, snap.Root.Size);
+        Assert.Equal(@"R:\$Recycle.Bin\S-1-5-21\$I1.dat", snap.TopFiles.Single(f => f.Name == "$I1.dat").FullPath);
+        Assert.DoesNotContain(snap.TopFiles, f => f.Name is "$R123.iso" or "$R456.zip");
+        Assert.Equal(snap.Root.Children.OrderByDescending(c => c.Size).Select(c => c.Name), snap.Root.Children.Select(c => c.Name));
+        Assert.Equal(0, snap.RecycledBytes);
+        Assert.Equal(7240, snap.DriveSpace!.Value.UsedBytes);
+        Assert.Equal(unreadableBefore, snap.UnreadableBytes); // the 760 freed bytes are gone from the drive and from the files alike
+    }
+
+    [Fact]
+    public void AfterEmptying_WhenTheBinCannotBeListed_NothingIsReplaced()
+    {
+        var fs = SampleWithSystemFolders();
+        var analysis = Analysis(fs);
+        var snap = analysis.ScanLocal(Drive);
+        var bin = Child(snap.Root, "$Recycle.Bin");
+        fs.Fail("$Recycle.Bin", new UnauthorizedAccessException("denied"));
+
+        var fresh = analysis.ScanFolder(snap, bin);
+
+        Assert.Equal(ScanOutcome.RootUnreachable, fresh.Outcome);
+        Assert.False(snap.ReplaceFolder(bin, fresh));
+        Assert.Same(bin, Child(snap.Root, "$Recycle.Bin"));
+        Assert.Equal(800, bin.Size);
+    }
+
+    // ---------------------------------------------------------------- files in the tree (user feedback)
+
+    [Fact]
+    public void LoadFiles_Local_ListsExactlyThatFolder_SortedBySize_WithoutOpeningAnything()
+    {
+        var fs = Sample();
+        fs.File(@"Docs\small.txt", 5, 11)
+            .File(@"Docs\zebra.txt", 200, 12)  // same size as b.txt: by name
+            .File(@"Docs\cloud.bin", 5_000_000, 13, Cloud)
+            .File(@"Docs\offline.bin", 7_000, 14, FileAttributes.Offline);
+        var analysis = Analysis(fs);
+        var snap = analysis.ScanLocal(Drive);
+        var docs = Child(snap.Root, "Docs");
+        fs.Calls.Clear();
+
+        var listing = analysis.LoadFiles(snap, docs);
+
+        Assert.Equal([@"R:\Docs"], fs.Calls);           // one listing of this folder, no subfolder, no file
+        Assert.Equal(["b.txt", "zebra.txt", "a.txt", "small.txt", "cloud.bin", "offline.bin"], listing.Files.Select(f => f.Name));
+        Assert.Equal(0, listing.OmittedCount);
+        Assert.All(listing.Files, f => Assert.Same(docs, f.Parent));
+        Assert.Equal(@"R:\Docs\b.txt", listing.Files[0].FullPath);
+        Assert.Equal(FakeFileSystem.BaseTime.AddSeconds(3), listing.Files[0].LastWriteUtc);
+
+        var cloud = listing.Files.Single(f => f.Name == "cloud.bin");
+        Assert.True(cloud.IsCloudOnly);
+        Assert.Equal(0, cloud.Size);                    // counts as 0 ...
+        Assert.Equal(5_000_000, cloud.CloudSize);       // ... but remembers what it is
+        Assert.True(listing.Files.Single(f => f.Name == "offline.bin").IsCloudOnly);
+        Assert.False(listing.Files[0].IsCloudOnly);
+    }
+
+    [Fact]
+    public void LoadFiles_MoreThanTheLimit_KeepsTheLargest_AndSumsUpTheRest()
+    {
+        var fs = new FakeFileSystem(Drive);
+        fs.Dir("Many");
+        long omittedSize = 0;
+        for (int i = 1; i <= FolderFileListing.Limit + 25; i++)
+        {
+            fs.File($@"Many\f{i:D4}.dat", i);                // sizes 1 .. 1025
+            if (i <= 25)
+            {
+                omittedSize += i;                           // the 25 smallest are left out
+            }
+        }
+
+        var analysis = Analysis(fs);
+        var snap = analysis.ScanLocal(Drive);
+
+        var listing = analysis.LoadFiles(snap, Child(snap.Root, "Many"));
+
+        Assert.Equal(FolderFileListing.Limit, listing.Files.Count);
+        Assert.Equal(1025, listing.Files[0].Size);
+        Assert.Equal(26, listing.Files[^1].Size);
+        Assert.Equal(25, listing.OmittedCount);
+        Assert.Equal(omittedSize, listing.OmittedSize);
+    }
+
+    [Fact]
+    public void LoadFiles_ListingFails_ThrowsAndChangesNothing()
+    {
+        var fs = Sample();
+        var analysis = Analysis(fs);
+        var snap = analysis.ScanLocal(Drive);
+        fs.Fail("Docs", new UnauthorizedAccessException("denied"));
+
+        Assert.Throws<UnauthorizedAccessException>(() => analysis.LoadFiles(snap, Child(snap.Root, "Docs")));
+
+        Assert.Equal(6300, snap.Root.Size);
+        Assert.Equal(4, Child(snap.Root, "Docs").FileCount);
+    }
+
+    [Fact]
+    public void LoadFiles_Link_IsNotEntered()
+    {
+        var fs = Sample();
+        fs.Dir("Link", FileAttributes.ReparsePoint).File(@"Link\inside.txt", 9);
+        var analysis = Analysis(fs, links: new FakeLinkDetector(@"R:\Link"));
+        var snap = analysis.ScanLocal(Drive);
+        fs.Calls.Clear();
+
+        var listing = analysis.LoadFiles(snap, Child(snap.Root, "Link"));
+
+        Assert.Empty(listing.Files);
+        Assert.Empty(fs.Calls);
+    }
+
+    private sealed class ForbiddenLister : IDirectoryLister
+    {
+        public int Calls { get; private set; }
+
+        public IReadOnlyList<RawEntry> List(string directoryPath)
+        {
+            Calls++;
+            throw new InvalidOperationException("The server must not be asked: " + directoryPath);
+        }
+    }
+
+    [Fact]
+    public void LoadFiles_Share_ComesFromTheDatabase_AndTheListerIsNeverAsked()
+    {
+        var fs = new FakeFileSystem(@"\\server\share");
+        fs.Dir("Projects", mtimeOffset: 1).File(@"Projects\plan.doc", 700, 2).File(@"Projects\notes.txt", 20, 3)
+            .File(@"Projects\cloud.bin", 1_000_000, 4, Cloud).Dir(@"Projects\Old").File(@"Projects\Old\x.doc", 300, 5)
+            .File("readme.txt", 50, 6);
+        var root = _f.Store.AddRoot(@"\\server\share", null, RootKind.Network);
+        new Scanner(_f.Store, fs, ExcludeRules.None, new ScannerOptions { Clock = new FakeScanClock(), LinkDetector = new FakeLinkDetector() })
+            .ScanRoot(root.Id);
+        var forbidden = new ForbiddenLister();
+        var analysis = new StorageAnalysis(
+            () => _f.Store, forbidden, new FakeLinkDetector(), new DriveDiscovery(new FakeDriveSource()), new FakeSpace());
+        var snap = analysis.ReadShare(root.Id);
+        var projects = Child(snap.Root, "Projects");
+        Assert.NotNull(projects.EntryId);
+
+        var listing = analysis.LoadFiles(snap, projects);
+        var top = analysis.LoadFiles(snap, snap.Root);
+
+        Assert.Equal(["plan.doc", "notes.txt", "cloud.bin"], listing.Files.Select(f => f.Name));
+        Assert.Equal([700L, 20L, 0L], listing.Files.Select(f => f.Size));
+        Assert.True(listing.Files[2].IsCloudOnly);
+        Assert.Equal(1_000_000, listing.Files[2].CloudSize);
+        Assert.Equal(@"\\server\share\Projects\plan.doc", listing.Files[0].FullPath);
+        Assert.Equal(FakeFileSystem.BaseTime.AddSeconds(2), listing.Files[0].LastWriteUtc);
+        Assert.Equal(["readme.txt"], top.Files.Select(f => f.Name));
+        Assert.Equal(0, forbidden.Calls);
+    }
+
+    [Fact]
+    public void LoadFiles_ShareWithoutADirectory_Throws_AndNeverFallsBackToTheServer()
+    {
+        var forbidden = new ForbiddenLister();
+        var root = _f.Store.AddRoot(@"\\server\x", null, RootKind.Network);
+        var good = new StorageAnalysis(
+            () => _f.Store, forbidden, new FakeLinkDetector(), new DriveDiscovery(new FakeDriveSource()), new FakeSpace());
+        var snap = good.ReadShare(root.Id);
+        var noDirectory = new StorageAnalysis(
+            () => null, forbidden, new FakeLinkDetector(), new DriveDiscovery(new FakeDriveSource()), new FakeSpace());
+        var folder = snap.Root;
+
+        Assert.Throws<InvalidOperationException>(() => noDirectory.LoadFiles(snap, folder));
+        Assert.Equal(0, forbidden.Calls);
+    }
+
+    [Fact]
+    public void RemoveFile_OfAFileShownInTheTree_AdjustsAllFoldersAbove_AndTheLargestFiles()
+    {
+        var fs = Sample();
+        fs.File(@"Docs\Sub\cloud.bin", 4_000, 11, Cloud);
+        var analysis = Analysis(fs);
+        var snap = analysis.ScanLocal(Drive);
+        var sub = Child(Child(snap.Root, "Docs"), "Sub");
+        var bin = new FakeBin();
+        var recycler = new SpaceRecycler(bin);
+
+        // a file as the tree has it (not the object of the list of the largest files)
+        var cFile = analysis.LoadFiles(snap, sub).Files.Single(f => f.Name == "c.txt");
+        Assert.DoesNotContain(snap.TopFiles, f => ReferenceEquals(f, cFile));
+        Assert.True(recycler.CanRecycle(snap, cFile));
+        recycler.Recycle(snap, cFile);
+
+        Assert.Equal([@"R:\Docs\Sub\c.txt"], bin.Files);
+        Assert.Equal(800, sub.Size);
+        Assert.Equal(2, sub.FileCount);                  // d.txt (below) and the cloud file
+        Assert.Equal(6300 - 400, snap.Root.Size);
+        Assert.Equal(1100, Child(snap.Root, "Docs").Size);
+        Assert.DoesNotContain(snap.TopFiles, f => f.Name == "c.txt");
+        Assert.Equal(400, snap.RecycledBytes);
+
+        // a cloud-only file occupies no space: only the counts change
+        var cloud = analysis.LoadFiles(snap, sub).Files.Single(f => f.Name == "cloud.bin");
+        recycler.Recycle(snap, cloud);
+
+        Assert.Equal(800, sub.Size);
+        Assert.Equal(1, sub.FileCount);
+        Assert.Equal(0, sub.CloudFileCount);
+        Assert.Equal(0, sub.CloudSize);
+        Assert.Equal(0, snap.Root.CloudFileCount);
+        Assert.Equal(400, snap.RecycledBytes);
+    }
+
+    [Fact]
+    public void FolderFileListing_SortsBySizeThenName_AndCutsAtTheLimit()
+    {
+        var folder = new SpaceCollector().AddFolder(null, @"R:\", null, FileAttributes.Directory);
+        SpaceFile F(string n, long s) => SpaceFile.ForTree(folder, n, s, DateTime.UnixEpoch, FileAttributes.Normal);
+
+        var small = FolderFileListing.Create([F("b", 1), F("A", 1), F("c", 9)]);
+        Assert.Equal(["c", "A", "b"], small.Files.Select(f => f.Name));
+        Assert.Equal(0, small.OmittedCount);
+
+        Assert.Empty(FolderFileListing.Create([]).Files);
+        Assert.Equal(0, FolderFileListing.Empty.OmittedCount);
+    }
+
     // ---------------------------------------------------------------- formatting
 
     [Theory]

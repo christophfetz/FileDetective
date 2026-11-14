@@ -204,6 +204,15 @@ They are replaced by {0}. Continue?</value></data>
   <data name="Storage_ConfirmFile" xml:space="preserve"><value>Move the file {0} ({1}) to the Recycle Bin? You can restore it from there. The space is only freed when the Recycle Bin is emptied.</value></data>
   <data name="Storage_Recycled" xml:space="preserve"><value>Moved to the Recycle Bin: {0}</value></data>
   <data name="Storage_RecycleFailed" xml:space="preserve"><value>It could not be moved to the Recycle Bin: {0}</value></data>
+  <data name="Storage_RecycleBinName" xml:space="preserve"><value>Recycle Bin</value></data>
+  <data name="Storage_EmptyBin" xml:space="preserve"><value>Empty Recycle Bin…</value></data>
+  <data name="Storage_BinEmptied" xml:space="preserve"><value>The Recycle Bin of {0} was emptied.</value></data>
+  <data name="Storage_BinNotEmptied" xml:space="preserve"><value>The Recycle Bin was not emptied.</value></data>
+  <data name="Storage_BinFailed" xml:space="preserve"><value>The Recycle Bin could not be emptied: {0}</value></data>
+  <data name="Storage_FilesLoading" xml:space="preserve"><value>Loading…</value></data>
+  <data name="Storage_FilesFailed" xml:space="preserve"><value>The files of this folder could not be read: {0}</value></data>
+  <data name="Storage_FilesMore" xml:space="preserve"><value>{0:N0} more files, {1}</value></data>
+  <data name="Storage_NoteCloudFile" xml:space="preserve"><value>only in the cloud, not counted ({0})</value></data>
   <data name="Menu_Duplicates" xml:space="preserve"><value>Duplicates…</value></data>
   <data name="Dup_Title" xml:space="preserve"><value>FileDetective – Duplicates</value></data>
   <data name="Dup_Intro" xml:space="preserve"><value>Files on local drives with the same size are compared by their content: first the first 64 KB, then the whole file (SHA-256). Files that are only in the cloud are never read, and hard links to the same file count once. Reading runs with low priority and can be cancelled at any time. Shares are only looked up in the directory; nothing on the server is opened.</value></data>

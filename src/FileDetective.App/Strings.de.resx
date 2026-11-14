@@ -204,6 +204,15 @@ Sie werden durch {0} ersetzt. Fortfahren?</value></data>
   <data name="Storage_ConfirmFile" xml:space="preserve"><value>Die Datei {0} ({1}) in den Papierkorb verschieben? Sie können sie von dort wiederherstellen. Der Platz wird erst frei, wenn der Papierkorb geleert wird.</value></data>
   <data name="Storage_Recycled" xml:space="preserve"><value>In den Papierkorb verschoben: {0}</value></data>
   <data name="Storage_RecycleFailed" xml:space="preserve"><value>Es konnte nicht in den Papierkorb verschoben werden: {0}</value></data>
+  <data name="Storage_RecycleBinName" xml:space="preserve"><value>Papierkorb</value></data>
+  <data name="Storage_EmptyBin" xml:space="preserve"><value>Papierkorb leeren …</value></data>
+  <data name="Storage_BinEmptied" xml:space="preserve"><value>Der Papierkorb von {0} wurde geleert.</value></data>
+  <data name="Storage_BinNotEmptied" xml:space="preserve"><value>Der Papierkorb wurde nicht geleert.</value></data>
+  <data name="Storage_BinFailed" xml:space="preserve"><value>Der Papierkorb konnte nicht geleert werden: {0}</value></data>
+  <data name="Storage_FilesLoading" xml:space="preserve"><value>Lade …</value></data>
+  <data name="Storage_FilesFailed" xml:space="preserve"><value>Die Dateien dieses Ordners konnten nicht gelesen werden: {0}</value></data>
+  <data name="Storage_FilesMore" xml:space="preserve"><value>{0:N0} weitere Dateien, {1}</value></data>
+  <data name="Storage_NoteCloudFile" xml:space="preserve"><value>nur in der Cloud, nicht mitgezählt ({0})</value></data>
   <data name="Menu_Duplicates" xml:space="preserve"><value>Dubletten …</value></data>
   <data name="Dup_Title" xml:space="preserve"><value>FileDetective – Dubletten</value></data>
   <data name="Dup_Intro" xml:space="preserve"><value>Dateien gleicher Größe auf lokalen Laufwerken werden nach ihrem Inhalt verglichen: zuerst die ersten 64 KB, dann die ganze Datei (SHA-256). Dateien, die nur in der Cloud liegen, werden nie gelesen, und harte Verknüpfungen auf dieselbe Datei zählen einmal. Gelesen wird mit niedriger Priorität, und die Suche lässt sich jederzeit abbrechen. Freigaben werden nur im Verzeichnis nachgeschlagen; auf dem Server wird nichts geöffnet.</value></data>

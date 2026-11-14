@@ -6,28 +6,71 @@ using FileDetective.Core;
 
 namespace FileDetective.App.ViewModels;
 
+/// <summary>What the tree of the storage window needs from outside: the snapshot and the loader of a folder's files.</summary>
+/// <param name="Snapshot">The numbers shown.</param>
+/// <param name="LoadFiles">
+/// Loads the files of one folder (on a background thread; for shares from the directory, never from the server). The
+/// continuation runs on the UI thread because rows are created there.
+/// </param>
+internal sealed record SpaceTreeContext(SpaceSnapshot Snapshot, Func<SpaceFolder, Task<FolderFileListing>> LoadFiles);
+
+internal enum SpaceRowKind
+{
+    Folder,
+    Unreadable,
+    File,
+    Loading,
+    FilesFailed,
+    MoreFiles,
+}
+
 /// <summary>
-/// One line of the folder tree in the storage window: a folder with size, share, counts and date, or the extra line
-/// "Unreadable or system area". The children are created when the line is first expanded.
+/// One line of the tree in the storage window: a folder (with size, share, counts and date), a file of an expanded
+/// folder, or an extra line ("Unreadable or system area", "Loading…", a failed listing, "n more files"). Subfolders are
+/// created when the line is first needed; the files of a folder are loaded when it is expanded (PLAN.md 11.1).
 /// </summary>
 internal sealed class SpaceRow : ObservableObject
 {
-    private readonly SpaceSnapshot _snapshot;
+    private readonly SpaceTreeContext _context;
+    private readonly string _text = string.Empty;
+    private readonly long _extraCount;
+    private readonly long _extraSize;
     private ObservableCollection<SpaceRow>? _children;
+    private List<SpaceRow>? _folderRows;
+    private List<SpaceRow> _fileRows = [];
+    private SpaceRow? _unreadableRow;
+    private SpaceRow? _statusRow;
+    private SpaceRow? _moreRow;
+    private bool _isExpanded;
+    private bool _filesRequested;
+    private bool _filesLoaded;
 
-    private SpaceRow(SpaceSnapshot snapshot, SpaceFolder? folder, SpaceRow? parent)
+    private SpaceRow(
+        SpaceTreeContext context, SpaceRowKind kind, SpaceRow? parent, SpaceFolder? folder = null, SpaceFile? file = null,
+        string text = "", long extraCount = 0, long extraSize = 0)
     {
-        _snapshot = snapshot;
-        Folder = folder;
+        _context = context;
+        Kind = kind;
         Parent = parent;
+        Folder = folder;
+        File = file;
+        _text = text;
+        _extraCount = extraCount;
+        _extraSize = extraSize;
     }
 
-    /// <summary>The folder, or null for the line "Unreadable or system area".</summary>
+    public SpaceRowKind Kind { get; }
+
+    /// <summary>The folder; null for every line that is not a folder.</summary>
     public SpaceFolder? Folder { get; }
+
+    /// <summary>The file; null for every line that is not a file.</summary>
+    public SpaceFile? File { get; }
 
     public SpaceRow? Parent { get; }
 
-    public bool IsUnreadableRow => Folder is null;
+    /// <summary>Lines that are no folder or file (shown in italics, no actions).</summary>
+    public bool IsMutedRow => Kind is SpaceRowKind.Unreadable or SpaceRowKind.Loading or SpaceRowKind.FilesFailed or SpaceRowKind.MoreFiles;
 
     public bool IsRoot => Parent is null;
 
@@ -46,30 +89,67 @@ internal sealed class SpaceRow : ObservableObject
         }
     }
 
-    /// <summary>Only the top line starts expanded.</summary>
-    public bool StartsExpanded => IsRoot;
+    /// <summary>Expanded state; kept in the line so it survives the recycling of the tree's containers. Expanding loads the files.</summary>
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set
+        {
+            if (SetProperty(ref _isExpanded, value) && value)
+            {
+                StartLoadingFiles();
+            }
+        }
+    }
 
-    public static SpaceRow CreateRoot(SpaceSnapshot snapshot) => new(snapshot, snapshot.Root, null);
+    public static SpaceRow CreateRoot(SpaceTreeContext context)
+    {
+        var root = new SpaceRow(context, SpaceRowKind.Folder, null, context.Snapshot.Root);
+        root.IsExpanded = true; // only the top line starts expanded
+        return root;
+    }
 
     public ObservableCollection<SpaceRow> Children => _children ??= BuildChildren();
 
-    /// <summary>Whether the children have been created already (and so must be kept up to date).</summary>
-    public bool ChildrenCreated => _children is not null;
+    public string Name => Kind switch
+    {
+        SpaceRowKind.Folder => Folder!.IsRecycleBin ? Strings.Get("Storage_RecycleBinName") : Folder.Name,
+        SpaceRowKind.File => File!.Name,
+        SpaceRowKind.Unreadable => Strings.Get("Storage_Unreadable"),
+        SpaceRowKind.Loading => Strings.Get("Storage_FilesLoading"),
+        SpaceRowKind.FilesFailed => _text,
+        _ => LocationUi.Format("Storage_FilesMore", _extraCount, ByteSize.Format(_extraSize)),
+    };
 
-    public string Name => Folder is null ? Strings.Get("Storage_Unreadable") : Folder.Name;
-
-    public string ToolTip => Folder is null ? Strings.Get("Storage_UnreadableTip") : Folder.FullPath;
+    public string ToolTip => Kind switch
+    {
+        SpaceRowKind.Folder => Folder!.FullPath,
+        SpaceRowKind.File => File!.FullPath,
+        SpaceRowKind.Unreadable => Strings.Get("Storage_UnreadableTip"),
+        SpaceRowKind.FilesFailed => _text,
+        _ => string.Empty,
+    };
 
     /// <summary>Hint text under the name: unreadable folder, link, cloud-only files.</summary>
     public string Note
     {
         get
         {
+            if (Kind == SpaceRowKind.File)
+            {
+                return File!.IsCloudOnly ? LocationUi.Format("Storage_NoteCloudFile", ByteSize.Format(File.CloudSize)) : string.Empty;
+            }
+
+            if (Kind == SpaceRowKind.Unreadable)
+            {
+                return _context.Snapshot.FailedDirectories > 0
+                    ? LocationUi.Format("Storage_NoteUnreadableCount", _context.Snapshot.FailedDirectories)
+                    : string.Empty;
+            }
+
             if (Folder is null)
             {
-                return _snapshot.FailedDirectories > 0
-                    ? LocationUi.Format("Storage_NoteUnreadableCount", _snapshot.FailedDirectories)
-                    : string.Empty;
+                return string.Empty;
             }
 
             var parts = new List<string>(3);
@@ -94,14 +174,22 @@ internal sealed class SpaceRow : ObservableObject
 
     public Visibility NoteVisibility => Note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
+    /// <summary>"Loading…" and a failed listing have no numbers and no bar.</summary>
+    public Visibility BarVisibility => Kind is SpaceRowKind.Loading or SpaceRowKind.FilesFailed ? Visibility.Collapsed : Visibility.Visible;
+
     /// <summary>Bytes the line stands for. The top line includes the unreadable part, so the shares below add up to 100 %.</summary>
-    private long DisplaySize => Folder is null
-        ? _snapshot.UnreadableBytes ?? 0
-        : IsRoot ? Folder.Size + (_snapshot.UnreadableBytes ?? 0) : Folder.Size;
+    private long DisplaySize => Kind switch
+    {
+        SpaceRowKind.Folder => IsRoot ? Folder!.Size + (_context.Snapshot.UnreadableBytes ?? 0) : Folder!.Size,
+        SpaceRowKind.Unreadable => _context.Snapshot.UnreadableBytes ?? 0,
+        SpaceRowKind.File => File!.Size,
+        SpaceRowKind.MoreFiles => _extraSize,
+        _ => 0,
+    };
 
-    public string SizeText => ByteSize.Format(DisplaySize);
+    public string SizeText => BarVisibility == Visibility.Visible ? ByteSize.Format(DisplaySize) : string.Empty;
 
-    /// <summary>Share of the line in its parent (the top line: 1).</summary>
+    /// <summary>Share of the line in its parent folder (the top line: 1).</summary>
     public double Fraction
     {
         get
@@ -116,13 +204,13 @@ internal sealed class SpaceRow : ObservableObject
         }
     }
 
-    public string PercentText => Fraction.ToString("P0", CultureInfo.CurrentCulture);
+    public string PercentText => BarVisibility == Visibility.Visible ? Fraction.ToString("P0", CultureInfo.CurrentCulture) : string.Empty;
 
     public string FilesText => Folder is null ? string.Empty : Folder.FileCount.ToString("N0", CultureInfo.CurrentCulture);
 
     public string FoldersText => Folder is null ? string.Empty : Folder.FolderCount.ToString("N0", CultureInfo.CurrentCulture);
 
-    public string DateText => Folder?.LastWriteUtc is { } utc
+    public string DateText => (Folder?.LastWriteUtc ?? File?.LastWriteUtc) is { } utc
         ? utc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)
         : string.Empty;
 
@@ -131,7 +219,7 @@ internal sealed class SpaceRow : ObservableObject
 
     /// <summary>
     /// Takes a line out of the tree and refreshes everything whose numbers changed: the lines above it and the shares of
-    /// all lines beside them. Call after the folder was removed from the snapshot.
+    /// all lines beside them. Call after the folder or file was removed from the snapshot.
     /// </summary>
     public void RemoveFromTree()
     {
@@ -140,12 +228,60 @@ internal sealed class SpaceRow : ObservableObject
             return;
         }
 
+        Parent._folderRows?.Remove(this);
+        Parent._fileRows.Remove(this);
         Parent._children?.Remove(this);
-        for (var ancestor = Parent; ancestor is not null; ancestor = ancestor.Parent)
+        RefreshAbove();
+    }
+
+    /// <summary>
+    /// Replaces this folder line by a line for <paramref name="newFolder"/> (after the folder was read again, e.g. the
+    /// emptied Recycle Bin) and refreshes everything whose numbers changed.
+    /// </summary>
+    public void ReplaceFolderInTree(SpaceFolder newFolder)
+    {
+        if (Parent is not { } parent || parent._folderRows is null)
         {
-            ancestor.Refresh();
-            ancestor.RefreshChildren();
+            return;
         }
+
+        int index = parent._folderRows.IndexOf(this);
+        if (index < 0)
+        {
+            return;
+        }
+
+        parent._folderRows[index] = new SpaceRow(_context, SpaceRowKind.Folder, parent, newFolder);
+        parent.Arrange();
+        RefreshAbove();
+    }
+
+    /// <summary>Removes the line of a file that was moved to the Recycle Bin from another list, if its folder was expanded.</summary>
+    public void RemoveRowsOf(SpaceFile file)
+    {
+        var chain = new Stack<SpaceFolder>();
+        for (var f = file.Parent; f is not null; f = f.Parent)
+        {
+            chain.Push(f);
+        }
+
+        if (chain.Count == 0 || !ReferenceEquals(chain.Pop(), Folder))
+        {
+            return;
+        }
+
+        var row = this;
+        while (chain.Count > 0)
+        {
+            var next = chain.Pop();
+            row = row._folderRows?.FirstOrDefault(r => ReferenceEquals(r.Folder, next));
+            if (row is null)
+            {
+                return;
+            }
+        }
+
+        row._fileRows.FirstOrDefault(r => r.File == file)?.RemoveFromTree();
     }
 
     /// <summary>Refreshes this line and every line below it that has been created.</summary>
@@ -163,6 +299,15 @@ internal sealed class SpaceRow : ObservableObject
         }
     }
 
+    private void RefreshAbove()
+    {
+        for (var ancestor = Parent; ancestor is not null; ancestor = ancestor.Parent)
+        {
+            ancestor.Refresh();
+            ancestor.RefreshChildren();
+        }
+    }
+
     private void RefreshChildren()
     {
         if (_children is null)
@@ -176,20 +321,119 @@ internal sealed class SpaceRow : ObservableObject
         }
     }
 
+    /// <summary>The folder has files of its own that are not listed yet (never for links).</summary>
+    private bool HasFilesToLoad
+        => Kind == SpaceRowKind.Folder && Folder is { IsLink: false } f && f.DirectFileCount + f.DirectCloudFileCount > 0;
+
     private ObservableCollection<SpaceRow> BuildChildren()
     {
-        var rows = new List<SpaceRow>();
-        if (Folder is not null)
+        _folderRows = Kind == SpaceRowKind.Folder
+            ? Folder!.Children.Select(c => new SpaceRow(_context, SpaceRowKind.Folder, this, c)).ToList()
+            : [];
+        if (Kind == SpaceRowKind.Folder && IsRoot && _context.Snapshot.UnreadableBytes is not null)
         {
-            rows.AddRange(Folder.Children.Select(c => new SpaceRow(_snapshot, c, this)));
-            if (IsRoot && _snapshot.UnreadableBytes is not null)
-            {
-                rows.Add(new SpaceRow(_snapshot, null, this));
-            }
+            _unreadableRow = new SpaceRow(_context, SpaceRowKind.Unreadable, this);
         }
 
-        // Largest first; the stable sort keeps the order of folders of equal size.
-        return new ObservableCollection<SpaceRow>(rows.OrderByDescending(r => r.DisplaySize));
+        // A folder with files gets a "Loading…" line at once: it is the reason the line can be expanded.
+        if (HasFilesToLoad && !_filesLoaded)
+        {
+            _statusRow = new SpaceRow(_context, SpaceRowKind.Loading, this);
+        }
+
+        return new ObservableCollection<SpaceRow>(Arranged());
+    }
+
+    private List<SpaceRow> Arranged()
+    {
+        var rows = new List<SpaceRow>();
+        if (_folderRows is not null)
+        {
+            rows.AddRange(_folderRows);
+        }
+
+        rows.AddRange(_fileRows);
+        if (_unreadableRow is not null)
+        {
+            rows.Add(_unreadableRow);
+        }
+
+        // Folders and files together, largest first; the stable sort keeps folders before files of equal size.
+        var sorted = rows.OrderByDescending(r => r.DisplaySize).ToList();
+        if (_statusRow is not null)
+        {
+            sorted.Insert(0, _statusRow);
+        }
+
+        if (_moreRow is not null)
+        {
+            sorted.Add(_moreRow);
+        }
+
+        return sorted;
+    }
+
+    private void Arrange()
+    {
+        if (_children is null)
+        {
+            return;
+        }
+
+        _children.Clear();
+        foreach (var row in Arranged())
+        {
+            _children.Add(row);
+        }
+    }
+
+    private void StartLoadingFiles()
+    {
+        if (_filesRequested || !HasFilesToLoad)
+        {
+            return;
+        }
+
+        _filesRequested = true;
+        _ = LoadFilesAsync();
+    }
+
+    private async Task LoadFilesAsync()
+    {
+        _ = Children; // creates the "Loading…" line
+        FolderFileListing? listing = null;
+        string? error = null;
+        try
+        {
+            listing = await _context.LoadFiles(Folder!);
+        }
+        catch (OperationCanceledException)
+        {
+            return; // the window is closing
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+
+        _filesLoaded = true;
+        _fileRows = [];
+        _moreRow = null;
+        _statusRow = null;
+        if (listing is not null)
+        {
+            _fileRows = listing.Files.Select(f => new SpaceRow(_context, SpaceRowKind.File, this, file: f)).ToList();
+            if (listing.OmittedCount > 0)
+            {
+                _moreRow = new SpaceRow(_context, SpaceRowKind.MoreFiles, this, extraCount: listing.OmittedCount, extraSize: listing.OmittedSize);
+            }
+        }
+        else
+        {
+            _statusRow = new SpaceRow(_context, SpaceRowKind.FilesFailed, this, text: LocationUi.Format("Storage_FilesFailed", error ?? string.Empty));
+        }
+
+        Arrange();
     }
 }
 

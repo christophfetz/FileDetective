@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using FileDetective.App.Interop;
@@ -20,11 +21,12 @@ namespace FileDetective.App;
 /// </summary>
 public partial class StorageWindow : Window
 {
+    private static readonly SystemRecycleBin SystemBin = new();
     private static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(400);
 
     private readonly AppServices _services;
     private readonly StorageAnalysis _analysis;
-    private readonly SpaceRecycler _recycler = new(new SystemRecycleBin());
+    private readonly SpaceRecycler _recycler = new(SystemBin, Environment.GetFolderPath(Environment.SpecialFolder.Windows));
     private readonly ObservableCollection<StorageDriveItem> _drives = [];
     private readonly Dictionary<string, SpaceSnapshot> _snapshots = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource _closing = new();
@@ -60,6 +62,8 @@ public partial class StorageWindow : Window
         RevealButton.Click += (_, _) => Reveal();
         CopyButton.Click += (_, _) => CopyPath();
         RecycleButton.Click += async (_, _) => await RecycleAsync();
+        EmptyBinButton.Click += async (_, _) => await EmptyBinAsync();
+        TreeEmptyBinItem.Click += async (_, _) => await EmptyBinAsync();
         TreeRevealItem.Click += (_, _) => Reveal();
         FileRevealItem.Click += (_, _) => Reveal();
         TreeCopyItem.Click += (_, _) => CopyPath();
@@ -139,6 +143,8 @@ public partial class StorageWindow : Window
         TreeCopyItem.Header = Strings.Get("Ctx_CopyPath");
         FileCopyItem.Header = Strings.Get("Ctx_CopyPath");
         TreeRecycleItem.Header = Strings.Get("Storage_Recycle");
+        EmptyBinButton.Content = Strings.Get("Storage_EmptyBin");
+        TreeEmptyBinItem.Header = Strings.Get("Storage_EmptyBin");
         FileRecycleItem.Header = Strings.Get("Storage_Recycle");
         LocalHint.Text = Strings.Get("Storage_LocalHint");
         DrivesEmpty.Text = Strings.Get("Settings_Loading");
@@ -476,7 +482,7 @@ public partial class StorageWindow : Window
         _shown = snapshot;
         PlaceholderText.Visibility = Visibility.Collapsed;
         Tabs.Visibility = Visibility.Visible;
-        FolderTree.ItemsSource = new[] { SpaceRow.CreateRoot(snapshot) };
+        FolderTree.ItemsSource = new[] { SpaceRow.CreateRoot(new SpaceTreeContext(snapshot, folder => LoadFilesAsync(snapshot, folder))) };
         FileList.ItemsSource = snapshot.TopFiles.Select(f => new SpaceFileRow(f)).ToList();
         if (_scanning is null)
         {
@@ -485,6 +491,13 @@ public partial class StorageWindow : Window
 
         UpdateButtons();
     }
+
+    /// <summary>
+    /// The files of one expanded folder (PLAN.md 11.1), on a background thread: a local folder is listed (no file is
+    /// opened), a share's files come from the directory and the server is not asked.
+    /// </summary>
+    private Task<FolderFileListing> LoadFilesAsync(SpaceSnapshot snapshot, SpaceFolder folder)
+        => Task.Run(() => _analysis.LoadFiles(snapshot, folder), _closing.Token);
 
     private static string SummaryText(SpaceSnapshot snapshot)
     {
@@ -531,7 +544,12 @@ public partial class StorageWindow : Window
 
         if (Tabs.SelectedItem == FoldersTab)
         {
-            return FolderTree.SelectedItem is SpaceRow { Folder: { } folder } ? (folder.FullPath, folder, null) : null;
+            return FolderTree.SelectedItem switch
+            {
+                SpaceRow { Folder: { } folder } => (folder.FullPath, folder, null),
+                SpaceRow { File: { } file } => (file.FullPath, null, file),
+                _ => null,
+            };
         }
 
         return FileList.SelectedItem is SpaceFileRow row ? (row.File.FullPath, null, row.File) : null;
@@ -553,11 +571,21 @@ public partial class StorageWindow : Window
             && (t.Folder is { } folder ? _recycler.CanRecycle(snapshot, folder) : t.File is { } file && _recycler.CanRecycle(snapshot, file));
         RecycleButton.IsEnabled = canRecycle;
 
-        // PLAN.md 11.1: "Move to Recycle Bin" exists for local entries only; for shares it is not even offered.
+        // PLAN.md 11.1: "Move to Recycle Bin" exists for local entries only; for shares it is not even offered. The
+        // Recycle Bin line has "Empty Recycle Bin" instead.
+        bool isBin = target is { } binTarget && binTarget.Folder is { IsRecycleBin: true } && _shown is { CanMoveToRecycleBin: true };
+        bool canEmpty = isBin && !_recycling && target is { } t2 && t2.Folder is { } binFolder && _shown is { } binSnapshot
+            && _recycler.CanEmptyRecycleBin(binSnapshot, binFolder);
         var recycleVisibility = _shown is { CanMoveToRecycleBin: false } ? Visibility.Collapsed : Visibility.Visible;
-        RecycleButton.Visibility = recycleVisibility;
-        TreeRecycleItem.Visibility = recycleVisibility;
+        var treeRecycleVisibility = isBin ? Visibility.Collapsed : recycleVisibility;
+        RecycleButton.Visibility = treeRecycleVisibility;
+        TreeRecycleItem.Visibility = treeRecycleVisibility;
         FileRecycleItem.Visibility = recycleVisibility;
+        var emptyVisibility = isBin ? Visibility.Visible : Visibility.Collapsed;
+        EmptyBinButton.Visibility = emptyVisibility;
+        TreeEmptyBinItem.Visibility = emptyVisibility;
+        EmptyBinButton.IsEnabled = canEmpty;
+        TreeEmptyBinItem.IsEnabled = canEmpty;
         TreeRevealItem.IsEnabled = FileRevealItem.IsEnabled = has;
         TreeCopyItem.IsEnabled = FileCopyItem.IsEnabled = has;
         TreeRecycleItem.IsEnabled = FileRecycleItem.IsEnabled = canRecycle;
@@ -634,9 +662,20 @@ public partial class StorageWindow : Window
             else
             {
                 var file = target.File!;
+                var fileRow = Tabs.SelectedItem == FoldersTab ? FolderTree.SelectedItem as SpaceRow : null;
                 await Task.Run(() => _recycler.MoveToBin(snapshot, file));
                 snapshot.RemoveFile(file);
-                (FolderTree.Items.Count > 0 ? FolderTree.Items[0] as SpaceRow : null)?.RefreshAll();
+                var top = FolderTree.Items.Count > 0 ? FolderTree.Items[0] as SpaceRow : null;
+                if (fileRow is not null)
+                {
+                    fileRow.RemoveFromTree();
+                }
+                else
+                {
+                    top?.RemoveRowsOf(file); // the file may be shown in the tree as well
+                }
+
+                top?.RefreshAll();
             }
 
             FileList.ItemsSource = snapshot.TopFiles.Select(x => new SpaceFileRow(x)).ToList();
@@ -651,6 +690,75 @@ public partial class StorageWindow : Window
         {
             _recycling = false;
             Cursor = null;
+            UpdateButtons();
+        }
+    }
+
+    /// <summary>
+    /// "Empty Recycle Bin" (PLAN.md 11.1) for the Recycle Bin line of a local drive: Windows (<c>SHEmptyRecycleBin</c> for
+    /// this drive only) asks the user and shows its own progress. If the user declines nothing changes. Afterwards the
+    /// folder <c>$Recycle.Bin</c> is listed again (a local run over just that subtree) and the numbers are corrected.
+    /// </summary>
+    private async Task EmptyBinAsync()
+    {
+        if (_recycling || Target() is not { } target || target.Folder is not { } folder || _shown is not { } snapshot
+            || !_recycler.CanEmptyRecycleBin(snapshot, folder))
+        {
+            return;
+        }
+
+        var row = FolderTree.SelectedItem as SpaceRow;
+        nint owner = new WindowInteropHelper(this).Handle;
+        string driveRoot = snapshot.Root.Name;
+        _recycling = true;
+        UpdateButtons();
+        try
+        {
+            var result = await Task.Run(() => _recycler.EmptyRecycleBin(snapshot, folder, owner));
+            if (result == RecycleBinEmptyResult.Cancelled)
+            {
+                ShowMessage(Strings.Get("Storage_BinNotEmptied"), false);
+                return;
+            }
+
+            var fresh = await Task.Run(() => _analysis.ScanFolder(snapshot, folder));
+            bool readable = fresh.Outcome is ScanOutcome.Complete or ScanOutcome.CompleteWithErrors;
+            if (readable && fresh.Root.Size == folder.Size && folder.Size > 0)
+            {
+                // Windows reported success but the bin has the same size: the user declined, nothing happened.
+                ShowMessage(Strings.Get("Storage_BinNotEmptied"), false);
+                return;
+            }
+
+            var space = await Task.Run(() => _analysis.GetDriveSpace(driveRoot));
+            if (_closing.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (snapshot.ReplaceFolder(folder, fresh))
+            {
+                row?.ReplaceFolderInTree(fresh.Root);
+            }
+
+            snapshot.RecycleBinWasEmptied(space);
+            if (_shownItem is { } item && snapshot.DriveSpace is { } driveSpace)
+            {
+                ApplySpace(item, driveSpace);
+            }
+
+            (FolderTree.Items.Count > 0 ? FolderTree.Items[0] as SpaceRow : null)?.RefreshAll();
+            FileList.ItemsSource = snapshot.TopFiles.Select(x => new SpaceFileRow(x)).ToList();
+            ShowMessage(LocationUi.Format("Storage_BinEmptied", driveRoot), false);
+        }
+        catch (Exception ex)
+        {
+            FileLog.Shared.Error("Emptying the Recycle Bin failed", ex);
+            ShowMessage(LocationUi.Format("Storage_BinFailed", ex.Message), true);
+        }
+        finally
+        {
+            _recycling = false;
             UpdateButtons();
         }
     }

@@ -49,7 +49,7 @@
 
       <!-- A tree item whose header stretches over the whole width, so the columns line up with the header row. -->
       <Style x:Key="FolderItemStyle" TargetType="TreeViewItem">
-        <Setter Property="IsExpanded" Value="{Binding StartsExpanded, Mode=OneTime}" />
+        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
         <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
         <Setter Property="Template">
           <Setter.Value>
@@ -144,7 +144,7 @@
               <TextBlock.Style>
                 <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                   <Style.Triggers>
-                    <DataTrigger Binding="{Binding IsUnreadableRow}" Value="True">
+                    <DataTrigger Binding="{Binding IsMutedRow}" Value="True">
                       <Setter Property="FontStyle" Value="Italic" />
                     </DataTrigger>
                   </Style.Triggers>
@@ -156,7 +156,7 @@
           </StackPanel>
           <TextBlock Grid.Column="1" Text="{Binding SizeText}" HorizontalAlignment="Right" VerticalAlignment="Center"
                      TextWrapping="NoWrap" />
-          <Grid Grid.Column="2" Margin="14,0,0,0" VerticalAlignment="Center">
+          <Grid Grid.Column="2" Margin="14,0,0,0" VerticalAlignment="Center" Visibility="{Binding BarVisibility}">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="44" />
@@ -245,6 +245,7 @@
                     <MenuItem x:Name="TreeCopyItem" />
                     <Separator />
                     <MenuItem x:Name="TreeRecycleItem" />
+                    <MenuItem x:Name="TreeEmptyBinItem" />
                   </ContextMenu>
                 </TreeView.ContextMenu>
               </TreeView>
@@ -291,6 +292,7 @@
         <Button x:Name="RevealButton" />
         <Button x:Name="CopyButton" />
         <Button x:Name="RecycleButton" />
+        <Button x:Name="EmptyBinButton" />
       </StackPanel>
       <TextBlock x:Name="ActionMessage" Margin="0,8,0,0" FontSize="12" Visibility="Collapsed" />
       <TextBlock x:Name="LocalHint" Margin="0,8,0,0" Style="{StaticResource MutedText}" />
