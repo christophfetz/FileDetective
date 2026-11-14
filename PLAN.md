@@ -563,6 +563,8 @@ Gruppen aus gleichem Namen (Suchform) und gleicher Größe, deutlich als „mög
 
 **Oberfläche**
 
+**Programm- und Datenbankdateien** (nachgetragen am 2026-11-14 nach Rückmeldung des Nutzers): Ein Schalter oben im Fenster, standardmäßig an und gemerkt in `hideTechnicalDuplicates`, blendet Gruppen aus, deren Dateien alle zu Programmen gehören: Endungen `.dll .exe .pdb .sys .ocx .msi .so .pyd .jar .node .db .sqlite .sqlite3 .db-wal .db-shm .mdf .ldf` oder ein Ordner `bin`, `obj`, `publish`, `packages`, `.nuget` im Pfad. Diese Kopien werden dort gebraucht, wo sie liegen. Eine Gruppe mit mindestens einer anderen Datei bleibt sichtbar. Die Zahl der ausgeblendeten Gruppen steht neben dem Schalter. Beim Ausblenden werden Markierungen der Gruppe aufgehoben, damit nie eine unsichtbare Datei in den Papierkorb geht. Die Suche selbst ist davon nicht betroffen.
+
 Gruppen sortiert nach verschwendetem Platz. Je Gruppe die Dateien mit Pfad und Datum und einem Häkchen. Hilfen: „alle außer der neuesten markieren“, „alle außer denen in diesem Ordner markieren“. Mindestens eine Datei je Gruppe bleibt immer unmarkiert. „In den Papierkorb“ zeigt Anzahl und Gesamtgröße, prüft direkt vor dem Verschieben erneut Größe und Datum und nutzt `Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile` mit `RecycleOption.SendToRecycleBin`.
 
 Abnahme durch Tests: gleiche Größe mit verschiedenem Inhalt ist keine Dublette; harte Verknüpfung ist keine Dublette; Cloud-Attribut verhindert jedes Lesen (Attrappe zählt Lesezugriffe); geänderte Datei macht die gespeicherte Prüfsumme ungültig; es lassen sich nie alle Dateien einer Gruppe markieren; für Orte der Art „Netzwerk“ wird nie eine Datei geöffnet.

@@ -216,6 +216,9 @@ Sie werden durch {0} ersetzt. Fortfahren?</value></data>
   <data name="Dup_MarkExceptNewest" xml:space="preserve"><value>Alle außer der neuesten markieren</value></data>
   <data name="Dup_MarkExceptFolder" xml:space="preserve"><value>Alle außer denen in diesem Ordner markieren</value></data>
   <data name="Dup_MarkExceptFolderTip" xml:space="preserve"><value>Behält die Dateien im Ordner der ausgewählten Datei und in seinen Unterordnern und markiert die übrigen Dateien derselben Gruppen.</value></data>
+  <data name="Dup_HideTechnical" xml:space="preserve"><value>Programm- und Datenbankdateien ausblenden</value></data>
+  <data name="Dup_HideTechnicalTip" xml:space="preserve"><value>Blendet Gruppen aus, die nur aus Dateien bestehen, die Programme an ihrem Ort brauchen: {0} sowie alles in den Ordnern {1}. Wer eine solche Kopie entfernt, kann ein Programm beschädigen. Ausgeblendete Gruppen kommen nie in den Papierkorb.</value></data>
+  <data name="Dup_HiddenTechnical" xml:space="preserve"><value>{0} Gruppen mit Programm- und Datenbankdateien ausgeblendet</value></data>
   <data name="Dup_ClearMarks" xml:space="preserve"><value>Markierungen aufheben</value></data>
   <data name="Dup_Recycle" xml:space="preserve"><value>In den Papierkorb …</value></data>
   <data name="Dup_Loading" xml:space="preserve"><value>Verzeichnis wird gelesen …</value></data>

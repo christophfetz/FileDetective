@@ -29,6 +29,10 @@ public partial class DuplicatesWindow : Window
     private readonly CancellationTokenSource _closing = new();
     private readonly DispatcherTimer _progressTimer;
     private readonly object _progressGate = new();
+    private IReadOnlyList<DuplicateGroup> _allLocalGroups = [];
+    private IReadOnlyList<DuplicateGroup> _allShareGroups = [];
+
+    /// <summary>The visible local groups (after <see cref="DuplicateFilter"/>); marks and the Recycle Bin act only on these.</summary>
     private IReadOnlyList<DuplicateGroup> _localGroups = [];
     private IReadOnlyList<DuplicateGroup> _shareGroups = [];
     private DuplicateProgress? _progress;
@@ -52,6 +56,8 @@ public partial class DuplicatesWindow : Window
         SearchButton.Click += async (_, _) => await SearchAsync();
         CancelButton.Click += (_, _) => _searchCts?.Cancel();
         MinSizeBox.SelectionChanged += (_, _) => OnMinSizeChanged();
+        HideTechnicalBox.IsChecked = _services.Settings.Current.HideTechnicalDuplicates;
+        HideTechnicalBox.Click += (_, _) => OnHideTechnicalChanged();
         RevealButton.Click += (_, _) => Reveal();
         CopyButton.Click += (_, _) => CopyPath();
         LocalRevealItem.Click += (_, _) => Reveal();
@@ -131,6 +137,48 @@ public partial class DuplicatesWindow : Window
         FolderButton.ToolTip = Strings.Get("Dup_MarkExceptFolderTip");
         ClearButton.Content = Strings.Get("Dup_ClearMarks");
         RecycleButton.Content = Strings.Get("Dup_Recycle");
+        HideTechnicalBox.Content = Strings.Get("Dup_HideTechnical");
+        HideTechnicalBox.ToolTip = LocationUi.Format(
+            "Dup_HideTechnicalTip",
+            string.Join(" ", DuplicateFilter.TechnicalExtensions),
+            string.Join(", ", DuplicateFilter.TechnicalFolderNames));
+    }
+
+    // ---------------------------------------------------------------- filter
+
+    private bool HideTechnical => HideTechnicalBox.IsChecked == true;
+
+    private void OnHideTechnicalChanged()
+    {
+        try
+        {
+            bool hide = HideTechnical;
+            if (hide != _services.Settings.Current.HideTechnicalDuplicates)
+            {
+                _services.Settings.Update(s => s with { HideTechnicalDuplicates = hide });
+            }
+        }
+        catch (Exception ex)
+        {
+            FileLog.Shared.Error("Saving the duplicate filter failed", ex);
+        }
+
+        ApplyFilter();
+    }
+
+    /// <summary>Shows the groups that pass the filter; hiding a group clears its marks (see <see cref="DuplicateFilter.Apply"/>).</summary>
+    private void ApplyFilter()
+    {
+        var (local, hiddenLocal) = DuplicateFilter.Apply(_allLocalGroups, HideTechnical);
+        var (shares, hiddenShares) = DuplicateFilter.Apply(_allShareGroups, HideTechnical);
+        _localGroups = local;
+        _shareGroups = shares;
+        FillRows(_localRows, _localGroups);
+        FillRows(_shareRows, _shareGroups);
+        int hidden = hiddenLocal + hiddenShares;
+        HiddenText.Text = hidden > 0 ? LocationUi.Format("Dup_HiddenTechnical", hidden) : string.Empty;
+        ShowEmptyTexts();
+        UpdateButtons();
     }
 
     // ---------------------------------------------------------------- minimum size
@@ -217,16 +265,16 @@ public partial class DuplicatesWindow : Window
             var token = cts.Token;
 
             // Shares first: from the directory only, quick, nothing on the server is touched.
-            _shareGroups = await Task.Run(() => finder.FindOnShares(minSize, token), token);
-            FillRows(_shareRows, _shareGroups);
+            _allShareGroups = await Task.Run(() => finder.FindOnShares(minSize, token), token);
             _searched = true;
+            ApplyFilter();
 
             SetProgress(new DuplicateProgress(DuplicatePhase.Checking, 0, 0, 0));
             _progressTimer.Start();
             ShowProgress();
             var result = await LowPriorityWork.Run(() => finder.FindLocal(minSize, SetProgress, token));
-            _localGroups = result.Groups;
-            FillRows(_localRows, _localGroups);
+            _allLocalGroups = result.Groups;
+            ApplyFilter();
             StatusText.Text = SummaryText(result);
         }
         catch (OperationCanceledException)
@@ -382,6 +430,7 @@ public partial class DuplicatesWindow : Window
         SearchButton.IsEnabled = !searching && !_recycling;
         CancelButton.IsEnabled = searching;
         MinSizeBox.IsEnabled = !searching && !_recycling;
+        HideTechnicalBox.IsEnabled = !_recycling;
 
         bool has = SelectedRow is not null;
         RevealButton.IsEnabled = has;
@@ -464,8 +513,8 @@ public partial class DuplicatesWindow : Window
             var recycler = new DuplicateRecycler(new SystemRecycleBin(), SystemLocalFileAccess.Instance);
             var report = await Task.Run(() => recycler.Recycle(groups, file => Forget(store, file)));
 
-            _localGroups = [.. groups.Where(g => g.Files.Count > 1)];
-            FillRows(_localRows, _localGroups);
+            _allLocalGroups = [.. _allLocalGroups.Where(g => g.Files.Count > 1)];
+            ApplyFilter();
             ShowMessage(ReportText(report), report.Any(r => r.Outcome != DuplicateRecycleOutcome.Moved));
         }
         catch (Exception ex)

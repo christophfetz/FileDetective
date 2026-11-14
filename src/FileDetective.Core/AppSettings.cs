@@ -82,6 +82,13 @@ public sealed record AppSettings
     [JsonPropertyName("duplicateMinSize")]
     public long DuplicateMinSize { get; init; } = DuplicateMinSizeDefault;
 
+    /// <summary>
+    /// Duplicates window: hide groups of program and database files (<see cref="DuplicateFilter"/>). Switched in the
+    /// window itself and remembered here. Default on.
+    /// </summary>
+    [JsonPropertyName("hideTechnicalDuplicates")]
+    public bool HideTechnicalDuplicates { get; init; } = true;
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; init; }
 

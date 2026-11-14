@@ -216,6 +216,9 @@ They are replaced by {0}. Continue?</value></data>
   <data name="Dup_MarkExceptNewest" xml:space="preserve"><value>Mark all but the newest</value></data>
   <data name="Dup_MarkExceptFolder" xml:space="preserve"><value>Mark all but those in this folder</value></data>
   <data name="Dup_MarkExceptFolderTip" xml:space="preserve"><value>Keeps the files in the folder of the selected file and its subfolders, and marks the other files of the same groups.</value></data>
+  <data name="Dup_HideTechnical" xml:space="preserve"><value>Hide program and database files</value></data>
+  <data name="Dup_HideTechnicalTip" xml:space="preserve"><value>Hides groups made only of files that programs need where they are: {0}, and everything in the folders {1}. Removing such a copy can break a program. Hidden groups are never moved to the Recycle Bin.</value></data>
+  <data name="Dup_HiddenTechnical" xml:space="preserve"><value>{0} groups of program and database files hidden</value></data>
   <data name="Dup_ClearMarks" xml:space="preserve"><value>Clear marks</value></data>
   <data name="Dup_Recycle" xml:space="preserve"><value>Move to Recycle Bin…</value></data>
   <data name="Dup_Loading" xml:space="preserve"><value>Reading the directory…</value></data>
