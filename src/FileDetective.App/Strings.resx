@@ -213,6 +213,17 @@ They are replaced by {0}. Continue?</value></data>
   <data name="Storage_FilesLoading" xml:space="preserve"><value>Loading…</value></data>
   <data name="Storage_FilesFailed" xml:space="preserve"><value>The files of this folder could not be read: {0}</value></data>
   <data name="Storage_FilesMore" xml:space="preserve"><value>{0:N0} more files, {1}</value></data>
+  <data name="Storage_TitleAdmin" xml:space="preserve"><value>FileDetective – Storage space (with administrator rights)</value></data>
+  <data name="Storage_AdminBadge" xml:space="preserve"><value>With administrator rights</value></data>
+  <data name="Storage_AnalyzeAsAdmin" xml:space="preserve"><value>Analyze as administrator…</value></data>
+  <data name="Storage_AnalyzeAsAdminTip" xml:space="preserve"><value>Opens a second storage window with administrator rights (Windows asks first). It can also read the locked folders. Search and directory keep running without administrator rights.</value></data>
+  <data name="Storage_AdminStarted" xml:space="preserve"><value>The storage window with administrator rights was started.</value></data>
+  <data name="Storage_AdminDeclined" xml:space="preserve"><value>Administrator rights were not granted; nothing was started.</value></data>
+  <data name="Storage_AdminFailed" xml:space="preserve"><value>The analysis with administrator rights could not be started: {0}</value></data>
+  <data name="Storage_AdminNoShares" xml:space="preserve"><value>This window runs with administrator rights and only shows local drives. Shares are not shown here: they come from the directory, and network drives are usually not connected in a process with administrator rights. Nothing is written to the data folder.</value></data>
+  <data name="Storage_AdminRecycleNote" xml:space="preserve"><value>With administrator rights – protected files are moved too.</value></data>
+  <data name="Storage_NoteLocked" xml:space="preserve"><value>could not be listed, size unknown</value></data>
+  <data name="Storage_LockedMore" xml:space="preserve"><value>{0:N0} more</value></data>
   <data name="Storage_NoteCloudFile" xml:space="preserve"><value>only in the cloud, not counted ({0})</value></data>
   <data name="Menu_Duplicates" xml:space="preserve"><value>Duplicates…</value></data>
   <data name="Dup_Title" xml:space="preserve"><value>FileDetective – Duplicates</value></data>

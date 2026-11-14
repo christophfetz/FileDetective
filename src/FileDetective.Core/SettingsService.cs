@@ -16,6 +16,9 @@ public enum SettingsLoadResult
 
     /// <summary>The file was unreadable; it was renamed (<see cref="SettingsService.BackupPath"/>) and defaults apply.</summary>
     CorruptRenamed,
+
+    /// <summary>The file was unreadable and the service is read-only: it was left as it is and defaults apply.</summary>
+    CorruptIgnored,
 }
 
 /// <summary>
@@ -38,14 +41,24 @@ public sealed class SettingsService
     private readonly TimeProvider _clock;
     private AppSettings _current = new();
 
-    public SettingsService(string path, TimeProvider? clock = null)
+    /// <param name="path">The settings file.</param>
+    /// <param name="clock">Time source for the name of a renamed damaged file.</param>
+    /// <param name="readOnly">
+    /// Never write: a damaged file is left in place and <see cref="Save"/> / <see cref="Update"/> throw. Used by the storage
+    /// process with administrator rights, which reads the language and writes nothing to the data folder (PLAN.md 11.1).
+    /// </param>
+    public SettingsService(string path, TimeProvider? clock = null, bool readOnly = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         FilePath = path;
         _clock = clock ?? TimeProvider.System;
+        IsReadOnly = readOnly;
     }
 
     public string FilePath { get; }
+
+    /// <summary>True if this service never writes (see the constructor).</summary>
+    public bool IsReadOnly { get; }
 
     /// <summary>Where the damaged file went, or null.</summary>
     public string? BackupPath { get; private set; }
@@ -103,6 +116,11 @@ public sealed class SettingsService
             catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
             {
                 _current = new AppSettings();
+                if (IsReadOnly)
+                {
+                    return SettingsLoadResult.CorruptIgnored;
+                }
+
                 BackupPath = TryRename();
                 return SettingsLoadResult.CorruptRenamed;
             }
@@ -141,6 +159,11 @@ public sealed class SettingsService
 
     private void Write(AppSettings settings)
     {
+        if (IsReadOnly)
+        {
+            throw new InvalidOperationException("These settings are read-only; nothing is written.");
+        }
+
         string? folder = Path.GetDirectoryName(FilePath);
         if (!string.IsNullOrEmpty(folder))
         {

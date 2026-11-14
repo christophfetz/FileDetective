@@ -26,22 +26,24 @@ public partial class App : System.Windows.Application
     private Mutex? _runningMarker;
 
     /// <summary>Start after an update: <c>--restart-after &lt;pid&gt;</c> waits for the old process to end first.</summary>
-    private const string RestartAfterArgument = "--restart-after";
+    private const string RestartAfterArgument = StartupOptions.RestartAfterArgument;
 
     private void OnStartup(object sender, System.Windows.StartupEventArgs e)
     {
-        bool autostart = e.Args.Contains("--autostart", StringComparer.OrdinalIgnoreCase);
+        var options = StartupOptions.Parse(e.Args);
+        if (options.Mode == StartupMode.StorageAdmin)
+        {
+            StartStorageOnly();
+            return;
+        }
+
+        bool autostart = options.Mode == StartupMode.Autostart;
 
         // After an update the old process starts this one and ends; wait for it (up to 20 s) so that the single-instance
         // mutex is free. A restart after an update is quiet like an autostart.
-        int restartIndex = Array.FindIndex(e.Args, a => a.Equals(RestartAfterArgument, StringComparison.OrdinalIgnoreCase));
-        if (restartIndex >= 0)
+        if (options.RestartAfterProcessId is { } oldPid)
         {
-            autostart = true;
-            if (restartIndex + 1 < e.Args.Length && int.TryParse(e.Args[restartIndex + 1], out int oldPid))
-            {
-                WaitForProcessEnd(oldPid);
-            }
+            WaitForProcessEnd(oldPid);
         }
 
         // PLAN.md 8.1: unhandled exceptions are logged and reported in the tray; on the UI thread the program goes on.
@@ -167,6 +169,48 @@ public partial class App : System.Windows.Application
         {
             ShowSearch();
         }
+    }
+
+    // ---------------------------------------------------------------- storage process (PLAN.md 2.6, 11.1)
+
+    /// <summary>
+    /// <c>--storage-admin</c>: only the storage space window, normally started elevated by "Analyze as administrator…".
+    /// Follows <see cref="StartupPlan.For"/>: no single-instance lock (it runs beside the normal instance), the running
+    /// marker for the installer, settings read only for the language, no log, no directory, no tray icon, no hotkey, no
+    /// update check, no autostart, no first-run set-up. Nothing is written to the data folder. Ends when the window closes.
+    /// </summary>
+    private void StartStorageOnly()
+    {
+        var plan = StartupPlan.For(StartupMode.StorageAdmin);
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+
+        // FileLog.Initialize is not called (plan.WriteLog is false): the shared log writes nothing.
+        var settings = new SettingsService(AppPaths.SettingsPath, readOnly: !plan.WritableSettings);
+        settings.Load();
+        LanguageSetup.Apply(settings.Current.LanguageChoice);
+
+        if (plan.HoldRunningMarker)
+        {
+            try
+            {
+                _runningMarker = new Mutex(false, SingleInstanceGuard.RunningMarkerName);
+            }
+            catch (Exception)
+            {
+                // Without the marker the installer cannot see this process; the window still works.
+            }
+        }
+
+        var window = new StorageWindow(new DriveDiscovery(), index: null, StartupMode.StorageAdmin);
+        _storageWindow = window;
+        window.Closed += (_, _) =>
+        {
+            _storageWindow = null;
+            Shutdown();
+        };
+        window.ShowInFront();
     }
 
     // ---------------------------------------------------------------- Start menu (PLAN.md 7.3)
@@ -404,7 +448,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        var window = new StorageWindow(_services);
+        var window = new StorageWindow(_services.Drives, _services.Index, StartupMode.Normal);
         _storageWindow = window;
         window.Closed += (_, _) => _storageWindow = null;
         window.ShowInFront();

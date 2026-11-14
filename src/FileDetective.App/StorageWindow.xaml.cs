@@ -24,7 +24,10 @@ public partial class StorageWindow : Window
     private static readonly SystemRecycleBin SystemBin = new();
     private static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(400);
 
-    private readonly AppServices _services;
+    private readonly DriveDiscovery _driveDiscovery;
+    private readonly IndexService? _index;
+    private readonly bool _adminMode;
+    private readonly bool _offerAdmin;
     private readonly StorageAnalysis _analysis;
     private readonly SpaceRecycler _recycler = new(SystemBin, Environment.GetFolderPath(Environment.SpecialFolder.Windows));
     private readonly ObservableCollection<StorageDriveItem> _drives = [];
@@ -38,18 +41,25 @@ public partial class StorageWindow : Window
     private StorageDriveItem? _shownItem;
     private SpaceSnapshot? _shown;
     private bool _recycling;
+    private bool _launchingAdmin;
 
-    internal StorageWindow(AppServices services)
+    /// <param name="drives">Finds the local drives.</param>
+    /// <param name="index">The directory, for shares; null in the storage process with administrator rights (no shares).</param>
+    /// <param name="mode">How the program was started; <see cref="StartupMode.StorageAdmin"/> is the storage process.</param>
+    internal StorageWindow(DriveDiscovery drives, IndexService? index, StartupMode mode)
     {
-        _services = services;
+        _driveDiscovery = drives;
+        _index = index;
+        _adminMode = mode == StartupMode.StorageAdmin;
+        _offerAdmin = StorageAdminLauncher.CanOffer(mode, WindowsElevationProbe.Instance);
         _analysis = new StorageAnalysis(
-            () => services.Index.Store,
+            () => _index?.Store,
             FileSystemDirectoryLister.Instance,
             ReparseTagLinkDetector.Instance,
-            services.Drives,
+            drives,
             SystemDriveSpaceSource.Instance);
         InitializeComponent();
-        Title = Strings.Get("Storage_Title");
+        Title = Strings.Get(_adminMode ? "Storage_TitleAdmin" : "Storage_Title");
         FillTexts();
         DriveList.ItemsSource = _drives;
 
@@ -59,6 +69,7 @@ public partial class StorageWindow : Window
         DriveList.SelectionChanged += (_, _) => OnDriveSelected();
         AnalyzeButton.Click += async (_, _) => await AnalyzeAsync();
         CancelButton.Click += (_, _) => _scanCts?.Cancel();
+        AdminButton.Click += async (_, _) => await LaunchAdminAsync();
         RevealButton.Click += (_, _) => Reveal();
         CopyButton.Click += (_, _) => CopyPath();
         RecycleButton.Click += async (_, _) => await RecycleAsync();
@@ -148,13 +159,58 @@ public partial class StorageWindow : Window
         FileRecycleItem.Header = Strings.Get("Storage_Recycle");
         LocalHint.Text = Strings.Get("Storage_LocalHint");
         DrivesEmpty.Text = Strings.Get("Settings_Loading");
+        AdminButton.Content = Strings.Get("Storage_AnalyzeAsAdmin");
+        AdminButton.ToolTip = Strings.Get("Storage_AnalyzeAsAdminTip");
+        AdminButton.Visibility = _offerAdmin ? Visibility.Visible : Visibility.Collapsed;
+        AdminBadge.Text = Strings.Get("Storage_AdminBadge");
+        AdminBadgeBox.Visibility = _adminMode ? Visibility.Visible : Visibility.Collapsed;
+        AdminHint.Text = Strings.Get("Storage_AdminNoShares");
+        AdminHint.Visibility = _adminMode ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// "Analyze as administrator…" (PLAN.md 2.6, 11.1): starts this program once more with <c>--storage-admin</c> and the
+    /// UAC prompt of Windows. Only on this click. A declined prompt changes nothing but a short hint.
+    /// </summary>
+    private async Task LaunchAdminAsync()
+    {
+        if (!_offerAdmin || _launchingAdmin)
+        {
+            return;
+        }
+
+        _launchingAdmin = true;
+        AdminButton.IsEnabled = false;
+        try
+        {
+            string? exe = Environment.ProcessPath;
+            var result = await Task.Run(() => StorageAdminLauncher.Launch(ShellRunAsStarter.Instance, exe));
+            switch (result.Status)
+            {
+                case AdminLaunchStatus.Started:
+                    ShowMessage(Strings.Get("Storage_AdminStarted"), false);
+                    break;
+                case AdminLaunchStatus.Declined:
+                    ShowMessage(Strings.Get("Storage_AdminDeclined"), false);
+                    break;
+                default:
+                    FileLog.Shared.Error("Starting the storage analysis as administrator failed", result.Error);
+                    ShowMessage(LocationUi.Format("Storage_AdminFailed", result.Error?.Message ?? string.Empty), true);
+                    break;
+            }
+        }
+        finally
+        {
+            _launchingAdmin = false;
+            AdminButton.IsEnabled = true;
+        }
     }
 
     // ---------------------------------------------------------------- drives and shares
 
     private async Task LoadDrivesAsync()
     {
-        var discovered = await LocationUi.DiscoverAsync(_services.Drives);
+        var discovered = await LocationUi.DiscoverAsync(_driveDiscovery);
         if (_closing.IsCancellationRequested)
         {
             return;
@@ -209,9 +265,14 @@ public partial class StorageWindow : Window
     /// <summary>Shares come from the locations of kind Network in the directory; nothing here asks the server.</summary>
     private async Task AddSharesAsync()
     {
+        if (_index is not { } index)
+        {
+            return; // the storage process has no directory, so no shares (PLAN.md 11.1)
+        }
+
         try
         {
-            await _services.Index.LoadedTask;
+            await index.LoadedTask;
         }
         catch (Exception)
         {
@@ -223,7 +284,7 @@ public partial class StorageWindow : Window
             return;
         }
 
-        foreach (var root in _services.Index.GetRoots().Where(r => r.Kind == RootKind.Network))
+        foreach (var root in index.GetRoots().Where(r => r.Kind == RootKind.Network))
         {
             _drives.Add(new StorageDriveItem(root.Path, root.UncPath is { } unc ? $"{root.Path}  ({unc})" : root.Path, root.Kind, root.Id)
             {
@@ -303,12 +364,12 @@ public partial class StorageWindow : Window
     /// <summary>A share snapshot is out of date when a newer scan finished since it was read.</summary>
     private bool IsStale(StorageDriveItem item, SpaceSnapshot snapshot)
     {
-        if (!item.IsShare || item.RootId is not { } id)
+        if (!item.IsShare || item.RootId is not { } id || _index is null)
         {
             return false;
         }
 
-        long? current = _services.Index.GetRoots().FirstOrDefault(r => r.Id == id)?.LastScanCompletedUtc;
+        long? current = _index.GetRoots().FirstOrDefault(r => r.Id == id)?.LastScanCompletedUtc;
         return current != snapshot.AsOf?.ToUnixTimeSeconds();
     }
 
@@ -548,6 +609,7 @@ public partial class StorageWindow : Window
             {
                 SpaceRow { Folder: { } folder } => (folder.FullPath, folder, null),
                 SpaceRow { File: { } file } => (file.FullPath, null, file),
+                SpaceRow { LockedPath: { } locked } => (locked, null, null), // only Show in Explorer and Copy path
                 _ => null,
             };
         }
@@ -632,7 +694,7 @@ public partial class StorageWindow : Window
     /// </summary>
     private async Task RecycleAsync()
     {
-        if (_recycling || Target() is not { } target || _shown is not { } snapshot)
+        if (_recycling || Target() is not { } target || _shown is not { } snapshot || (target.Folder is null && target.File is null))
         {
             return;
         }
@@ -640,6 +702,11 @@ public partial class StorageWindow : Window
         string question = target.Folder is { } folder
             ? LocationUi.Format("Storage_ConfirmFolder", target.Path, folder.FileCount, ByteSize.Format(folder.Size))
             : LocationUi.Format("Storage_ConfirmFile", target.Path, ByteSize.Format(target.File!.Size));
+        if (_adminMode)
+        {
+            question += Environment.NewLine + Environment.NewLine + Strings.Get("Storage_AdminRecycleNote");
+        }
+
         var answer = MessageBox.Show(
             this, question, Strings.Get("Storage_Title"), MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
         if (answer != MessageBoxResult.Yes)

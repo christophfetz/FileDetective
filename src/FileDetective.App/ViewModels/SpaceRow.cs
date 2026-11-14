@@ -22,6 +22,12 @@ internal enum SpaceRowKind
     Loading,
     FilesFailed,
     MoreFiles,
+
+    /// <summary>A folder that could not be listed, below the line "Unreadable or system area"; size unknown.</summary>
+    Locked,
+
+    /// <summary>"n more" below the locked folders when there are more than <see cref="LockedFolderList.DefaultLimit"/>.</summary>
+    MoreLocked,
 }
 
 /// <summary>
@@ -38,6 +44,7 @@ internal sealed class SpaceRow : ObservableObject
     private ObservableCollection<SpaceRow>? _children;
     private List<SpaceRow>? _folderRows;
     private List<SpaceRow> _fileRows = [];
+    private List<SpaceRow>? _lockedRows;
     private SpaceRow? _unreadableRow;
     private SpaceRow? _statusRow;
     private SpaceRow? _moreRow;
@@ -69,8 +76,12 @@ internal sealed class SpaceRow : ObservableObject
 
     public SpaceRow? Parent { get; }
 
+    /// <summary>The path of a locked folder line (it has Show in Explorer and Copy path only); null for every other line.</summary>
+    public string? LockedPath => Kind == SpaceRowKind.Locked ? _text : null;
+
     /// <summary>Lines that are no folder or file (shown in italics, no actions).</summary>
-    public bool IsMutedRow => Kind is SpaceRowKind.Unreadable or SpaceRowKind.Loading or SpaceRowKind.FilesFailed or SpaceRowKind.MoreFiles;
+    public bool IsMutedRow => Kind is SpaceRowKind.Unreadable or SpaceRowKind.Loading or SpaceRowKind.FilesFailed or SpaceRowKind.MoreFiles
+        or SpaceRowKind.MoreLocked;
 
     public bool IsRoot => Parent is null;
 
@@ -118,6 +129,8 @@ internal sealed class SpaceRow : ObservableObject
         SpaceRowKind.Unreadable => Strings.Get("Storage_Unreadable"),
         SpaceRowKind.Loading => Strings.Get("Storage_FilesLoading"),
         SpaceRowKind.FilesFailed => _text,
+        SpaceRowKind.Locked => _text,
+        SpaceRowKind.MoreLocked => LocationUi.Format("Storage_LockedMore", _extraCount),
         _ => LocationUi.Format("Storage_FilesMore", _extraCount, ByteSize.Format(_extraSize)),
     };
 
@@ -127,6 +140,7 @@ internal sealed class SpaceRow : ObservableObject
         SpaceRowKind.File => File!.FullPath,
         SpaceRowKind.Unreadable => Strings.Get("Storage_UnreadableTip"),
         SpaceRowKind.FilesFailed => _text,
+        SpaceRowKind.Locked => _text,
         _ => string.Empty,
     };
 
@@ -138,6 +152,11 @@ internal sealed class SpaceRow : ObservableObject
             if (Kind == SpaceRowKind.File)
             {
                 return File!.IsCloudOnly ? LocationUi.Format("Storage_NoteCloudFile", ByteSize.Format(File.CloudSize)) : string.Empty;
+            }
+
+            if (Kind == SpaceRowKind.Locked)
+            {
+                return Strings.Get("Storage_NoteLocked");
             }
 
             if (Kind == SpaceRowKind.Unreadable)
@@ -174,8 +193,10 @@ internal sealed class SpaceRow : ObservableObject
 
     public Visibility NoteVisibility => Note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-    /// <summary>"Loading…" and a failed listing have no numbers and no bar.</summary>
-    public Visibility BarVisibility => Kind is SpaceRowKind.Loading or SpaceRowKind.FilesFailed ? Visibility.Collapsed : Visibility.Visible;
+    /// <summary>"Loading…", a failed listing and locked folders (size unknown) have no numbers and no bar.</summary>
+    public Visibility BarVisibility => Kind is SpaceRowKind.Loading or SpaceRowKind.FilesFailed or SpaceRowKind.Locked or SpaceRowKind.MoreLocked
+        ? Visibility.Collapsed
+        : Visibility.Visible;
 
     /// <summary>Bytes the line stands for. The top line includes the unreadable part, so the shares below add up to 100 %.</summary>
     private long DisplaySize => Kind switch
@@ -327,6 +348,19 @@ internal sealed class SpaceRow : ObservableObject
 
     private ObservableCollection<SpaceRow> BuildChildren()
     {
+        if (Kind == SpaceRowKind.Unreadable)
+        {
+            // PLAN.md 11.1: the folders that could not be listed, sorted by path, at most 200 plus "n more".
+            var locked = _context.Snapshot.GetLockedFolders();
+            _lockedRows = locked.Paths.Select(p => new SpaceRow(_context, SpaceRowKind.Locked, this, text: p)).ToList();
+            if (locked.OmittedCount > 0)
+            {
+                _lockedRows.Add(new SpaceRow(_context, SpaceRowKind.MoreLocked, this, extraCount: locked.OmittedCount));
+            }
+
+            return new ObservableCollection<SpaceRow>(_lockedRows);
+        }
+
         _folderRows = Kind == SpaceRowKind.Folder
             ? Folder!.Children.Select(c => new SpaceRow(_context, SpaceRowKind.Folder, this, c)).ToList()
             : [];

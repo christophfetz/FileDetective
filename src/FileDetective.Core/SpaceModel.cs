@@ -184,6 +184,33 @@ public sealed record FolderFileListing(IReadOnlyList<SpaceFile> Files, long Omit
 }
 
 /// <summary>
+/// The folders that could not be listed (PLAN.md 11.1): at most a limit of paths, sorted by path (ignoring case), and the
+/// number of the ones left out ("n more").
+/// </summary>
+public sealed record LockedFolderList(IReadOnlyList<string> Paths, int OmittedCount)
+{
+    /// <summary>At most this many locked folders are listed.</summary>
+    public const int DefaultLimit = 200;
+
+    public static LockedFolderList Empty { get; } = new([], 0);
+
+    public int TotalCount => Paths.Count + OmittedCount;
+
+    public static LockedFolderList Create(IEnumerable<string> paths, int limit = DefaultLimit)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
+        var all = paths.ToList();
+        all.Sort((a, b) =>
+        {
+            int c = string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
+            return c != 0 ? c : string.CompareOrdinal(a, b);
+        });
+        return all.Count <= limit ? new LockedFolderList(all, 0) : new LockedFolderList(all.GetRange(0, limit), all.Count - limit);
+    }
+}
+
+/// <summary>
 /// The result of a storage analysis (PLAN.md 11.1): the folder tree with totals, the largest files and the facts about
 /// the run. Lives in memory only; nothing of it is written to the index.
 /// </summary>
@@ -260,6 +287,33 @@ public sealed class SpaceSnapshot
 
     /// <summary>True for numbers from a live walk of a local drive.</summary>
     public bool IsLocal => Source == SpaceSource.LiveScan;
+
+    /// <summary>
+    /// The folders below the top folder that could not be listed during the walk (PLAN.md 11.1, "Gesperrte Ordner"), sorted
+    /// by path and cut at <paramref name="limit"/>. Read from the tree, so folders moved to the Recycle Bin or replaced by
+    /// a fresh walk are left out. Their size is unknown.
+    /// </summary>
+    public LockedFolderList GetLockedFolders(int limit = LockedFolderList.DefaultLimit)
+    {
+        var paths = new List<string>();
+        var stack = new Stack<SpaceFolder>();
+        stack.Push(Root);
+        while (stack.Count > 0)
+        {
+            var folder = stack.Pop();
+            if (folder.IsUnreadable && !ReferenceEquals(folder, Root))
+            {
+                paths.Add(folder.FullPath);
+            }
+
+            foreach (var child in folder.Children)
+            {
+                stack.Push(child);
+            }
+        }
+
+        return LockedFolderList.Create(paths, limit);
+    }
 
     /// <summary>
     /// "Move to Recycle Bin" is only offered for entries of a local fixed drive (PLAN.md 2.9, 11.1): never for shares,

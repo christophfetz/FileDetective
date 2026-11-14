@@ -213,6 +213,17 @@ Sie werden durch {0} ersetzt. Fortfahren?</value></data>
   <data name="Storage_FilesLoading" xml:space="preserve"><value>Lade …</value></data>
   <data name="Storage_FilesFailed" xml:space="preserve"><value>Die Dateien dieses Ordners konnten nicht gelesen werden: {0}</value></data>
   <data name="Storage_FilesMore" xml:space="preserve"><value>{0:N0} weitere Dateien, {1}</value></data>
+  <data name="Storage_TitleAdmin" xml:space="preserve"><value>FileDetective – Speicherplatz (mit Administratorrechten)</value></data>
+  <data name="Storage_AdminBadge" xml:space="preserve"><value>Mit Administratorrechten</value></data>
+  <data name="Storage_AnalyzeAsAdmin" xml:space="preserve"><value>Als Administrator analysieren …</value></data>
+  <data name="Storage_AnalyzeAsAdminTip" xml:space="preserve"><value>Öffnet ein zweites Speicherplatz-Fenster mit Administratorrechten (Windows fragt vorher nach). Es kann auch die gesperrten Ordner lesen. Suche und Verzeichnis laufen weiter ohne Administratorrechte.</value></data>
+  <data name="Storage_AdminStarted" xml:space="preserve"><value>Das Speicherplatz-Fenster mit Administratorrechten wurde gestartet.</value></data>
+  <data name="Storage_AdminDeclined" xml:space="preserve"><value>Administratorrechte wurden nicht erteilt; es wurde nichts gestartet.</value></data>
+  <data name="Storage_AdminFailed" xml:space="preserve"><value>Die Analyse mit Administratorrechten konnte nicht gestartet werden: {0}</value></data>
+  <data name="Storage_AdminNoShares" xml:space="preserve"><value>Dieses Fenster läuft mit Administratorrechten und zeigt nur lokale Laufwerke. Freigaben stehen hier nicht: Sie kämen aus dem Verzeichnis, und Netzlaufwerke sind in einem Prozess mit Administratorrechten meist nicht verbunden. In den Datenordner wird nichts geschrieben.</value></data>
+  <data name="Storage_AdminRecycleNote" xml:space="preserve"><value>Mit Administratorrechten – auch geschützte Dateien werden verschoben.</value></data>
+  <data name="Storage_NoteLocked" xml:space="preserve"><value>konnte nicht aufgelistet werden, Größe unbekannt</value></data>
+  <data name="Storage_LockedMore" xml:space="preserve"><value>{0:N0} weitere</value></data>
   <data name="Storage_NoteCloudFile" xml:space="preserve"><value>nur in der Cloud, nicht mitgezählt ({0})</value></data>
   <data name="Menu_Duplicates" xml:space="preserve"><value>Dubletten …</value></data>
   <data name="Dup_Title" xml:space="preserve"><value>FileDetective – Dubletten</value></data>
