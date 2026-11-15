@@ -248,9 +248,9 @@ public sealed class IndexStore : IDisposable
     /// <returns>Number of removed entries (0 if the location does not exist).</returns>
     public int RemoveRoot(byte rootId)
     {
+        var ids = new List<int>();
         lock (_writeLock)
         {
-            var ids = new List<int>();
             using (var tx = _writeConnection.BeginTransaction())
             {
                 // Decision: a full scan of entries is fine here, removing a location is rare. No extra index
@@ -281,8 +281,10 @@ public sealed class IndexStore : IDisposable
             }
 
             ApplyDeletes(ids);
-            return ids.Count;
         }
+
+        RaiseChanged(new IndexChange([], ids, Relocated: false, Reset: false));
+        return ids.Count;
     }
 
     /// <summary>
@@ -296,6 +298,13 @@ public sealed class IndexStore : IDisposable
     /// </summary>
     /// <returns>Number of removed entries.</returns>
     public int ResetAllEntries()
+    {
+        int result = ResetAllEntriesCore();
+        RaiseChanged(new IndexChange([], [], Relocated: false, Reset: true));
+        return result;
+    }
+
+    private int ResetAllEntriesCore()
     {
         lock (_writeLock)
         {
@@ -592,6 +601,31 @@ public sealed class IndexStore : IDisposable
     public ApplyResult Apply(byte rootId, ChangeBatch batch)
     {
         ArgumentNullException.ThrowIfNull(batch);
+        var result = ApplyCore(rootId, batch, out var deleted);
+        if (Changed is not null)
+        {
+            var written = new List<WrittenFile>(batch.Inserts.Count + batch.Updates.Count);
+            foreach (var e in batch.Inserts)
+            {
+                if (!e.IsDirectory)
+                {
+                    written.Add(new WrittenFile(e.Id, e.Name));
+                }
+            }
+
+            foreach (var u in batch.Updates)
+            {
+                written.Add(new WrittenFile(u.Id, null));
+            }
+
+            RaiseChanged(new IndexChange(written, deleted, Relocated: false, Reset: false));
+        }
+
+        return result;
+    }
+
+    private ApplyResult ApplyCore(byte rootId, ChangeBatch batch, out List<int> deletedIds)
+    {
         lock (_writeLock)
         {
             var deleted = new List<int>();
@@ -675,6 +709,7 @@ public sealed class IndexStore : IDisposable
                 }
             }
 
+            deletedIds = deleted;
             return new ApplyResult(batch.Inserts.Count, batch.Updates.Count, deleted.Count);
         }
     }
@@ -709,6 +744,17 @@ public sealed class IndexStore : IDisposable
             ArgumentException.ThrowIfNullOrEmpty(newName);
         }
 
+        if (!RelocateCore(id, newParentId, newName))
+        {
+            return false;
+        }
+
+        RaiseChanged(new IndexChange([new WrittenFile(id, newName)], [], Relocated: true, Reset: false));
+        return true;
+    }
+
+    private bool RelocateCore(int id, int? newParentId, string? newName)
+    {
         lock (_writeLock)
         {
             using (var tx = _writeConnection.BeginTransaction())
@@ -791,6 +837,170 @@ public sealed class IndexStore : IDisposable
             }
 
             return true;
+        }
+    }
+
+    // ---------------------------------------------------------------- image text (stage 11, PLAN.md 11.3)
+
+    /// <summary>
+    /// Raised after every change that reached the database and the memory, outside the store's locks, on the thread that
+    /// made the change (scanner, watcher, UI action). Handlers must be quick and must not throw (an exception is swallowed).
+    /// Used by the image text to learn about new, changed, moved and removed images.
+    /// </summary>
+    public event Action<IndexChange>? Changed;
+
+    private void RaiseChanged(IndexChange change)
+    {
+        try
+        {
+            Changed?.Invoke(change);
+        }
+        catch (Exception)
+        {
+            // A listener must never break a scan or a watcher.
+        }
+    }
+
+    /// <summary>
+    /// Every file below the folder <paramref name="folderId"/> (all depths) as stored in the database, in one pass over the
+    /// index on <c>parent_id</c>. Read-only, on its own connection.
+    /// </summary>
+    public void ReadFilesBelow(int folderId, Action<StoredEntry> visit, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(visit);
+        using var connection = _database.OpenConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            WITH RECURSIVE sub(id) AS (
+              SELECT @id
+              UNION
+              SELECT e.id FROM entries e JOIN sub ON e.parent_id = sub.id WHERE e.is_dir = 1
+            )
+            SELECT e.id, e.parent_id, e.root_id, e.name, e.is_dir, e.size, e.mtime, e.attrs
+            FROM entries e JOIN sub ON e.parent_id = sub.id
+            WHERE e.is_dir = 0
+            """;
+        cmd.Parameters.AddWithValue("@id", folderId);
+        using var r = cmd.ExecuteReader();
+        int n = 0;
+        while (r.Read())
+        {
+            if ((++n & 0x3FF) == 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            visit(new StoredEntry(
+                r.GetInt32(0), r.GetInt32(1), (byte)r.GetInt32(2), r.GetString(3), false,
+                r.GetInt64(5), r.GetInt64(6), (FileAttributes)r.GetInt32(7)));
+        }
+    }
+
+    /// <summary>Every stored image text (stage 11), read in one pass on its own connection.</summary>
+    public IReadOnlyList<StoredImageText> ReadImageTexts(CancellationToken cancellationToken = default)
+    {
+        var result = new List<StoredImageText>();
+        using var connection = _database.OpenConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT entry_id, size, mtime, text FROM ocr";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            if ((result.Count & 0x3FF) == 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            result.Add(new StoredImageText(r.GetInt32(0), r.GetInt64(1), r.GetInt64(2), r.GetString(3)));
+        }
+
+        return result;
+    }
+
+    /// <summary>The stored image texts of the given entries; entries without a row are missing from the result.</summary>
+    public IReadOnlyDictionary<int, StoredImageText> GetImageTexts(IReadOnlyCollection<int> entryIds)
+    {
+        ArgumentNullException.ThrowIfNull(entryIds);
+        var result = new Dictionary<int, StoredImageText>();
+        lock (_readLock)
+        {
+            using var cmd = Command(_readConnection, null, "SELECT size, mtime, text FROM ocr WHERE entry_id = @id");
+            var p = cmd.Parameters.Add("@id", SqliteType.Integer);
+            foreach (int id in entryIds)
+            {
+                p.Value = id;
+                using var r = cmd.ExecuteReader();
+                if (r.Read())
+                {
+                    result[id] = new StoredImageText(id, r.GetInt64(0), r.GetInt64(1), r.GetString(2));
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Stores the text of an image, replacing an older row. Written only while the entry exists, under the same lock as
+    /// every deletion, so no text of a removed entry can stay behind (the trigger removes the rest).
+    /// </summary>
+    /// <returns>False if the entry no longer exists.</returns>
+    public bool SaveImageText(StoredImageText text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        lock (_writeLock)
+        {
+            using var cmd = Command(
+                _writeConnection, null,
+                """
+                INSERT OR REPLACE INTO ocr(entry_id, size, mtime, text)
+                SELECT @id, @size, @mtime, @text WHERE EXISTS (SELECT 1 FROM entries WHERE id = @id AND is_dir = 0)
+                """);
+            cmd.Parameters.AddWithValue("@id", text.EntryId);
+            cmd.Parameters.AddWithValue("@size", text.Size);
+            cmd.Parameters.AddWithValue("@mtime", text.MTimeTicks);
+            cmd.Parameters.AddWithValue("@text", text.Text);
+            return cmd.ExecuteNonQuery() > 0;
+        }
+    }
+
+    /// <summary>Removes the stored texts of the given entries (the entries themselves stay).</summary>
+    /// <returns>Number of removed rows.</returns>
+    public int DeleteImageTexts(IReadOnlyCollection<int> entryIds)
+    {
+        ArgumentNullException.ThrowIfNull(entryIds);
+        if (entryIds.Count == 0)
+        {
+            return 0;
+        }
+
+        lock (_writeLock)
+        {
+            int removed = 0;
+            using var tx = _writeConnection.BeginTransaction();
+            using (var cmd = Command(_writeConnection, tx, "DELETE FROM ocr WHERE entry_id = @id"))
+            {
+                var p = cmd.Parameters.Add("@id", SqliteType.Integer);
+                foreach (int id in entryIds)
+                {
+                    p.Value = id;
+                    removed += cmd.ExecuteNonQuery();
+                }
+            }
+
+            tx.Commit();
+            return removed;
+        }
+    }
+
+    /// <summary>Removes every stored image text (switching the image text off, PLAN.md 11.3).</summary>
+    /// <returns>Number of removed rows.</returns>
+    public int DeleteAllImageTexts()
+    {
+        lock (_writeLock)
+        {
+            using var cmd = Command(_writeConnection, null, "DELETE FROM ocr");
+            return cmd.ExecuteNonQuery();
         }
     }
 

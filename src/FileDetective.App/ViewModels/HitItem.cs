@@ -6,12 +6,12 @@ using FileDetective.Core;
 namespace FileDetective.App.ViewModels;
 
 /// <summary>One row of the hit list.</summary>
-internal sealed class HitItem
+internal class HitItem
 {
     /// <summary>Characters of the folder path shown before it is cut in the middle; fits the 300 DIP path column.</summary>
     public const int FolderDisplayLength = 44;
 
-    private HitItem(SearchHit hit, bool unreachable, SearchQuery? query)
+    protected HitItem(SearchHit hit, bool unreachable, SearchQuery? query)
     {
         var d = hit.Details;
         EntryId = hit.EntryId;
@@ -66,6 +66,52 @@ internal sealed class HitItem
     public ImageSource? Icon { get; }
 
     /// <summary>Creates the row; touches the icon cache, so call it on the UI thread.</summary>
-    public static HitItem From(SearchHit hit, bool unreachable, SearchQuery? query = null) => new(hit, unreachable, query);
+    public static HitItem From(SearchHit hit, bool unreachable, SearchQuery? query = null)
+        => hit.Snippet is not null ? new ImageHitItem(hit, unreachable, query) : new HitItem(hit, unreachable, query);
+}
+
+/// <summary>
+/// A row of mode Image text (PLAN.md 11.3): preview, name and the text place around the first hit with the terms marked.
+/// The preview arrives later from <see cref="Interop.Thumbnails"/>; until then the file type icon stands in.
+/// </summary>
+internal sealed class ImageHitItem : HitItem, System.ComponentModel.INotifyPropertyChanged
+{
+    private ImageSource? _thumbnail;
+
+    public ImageHitItem(SearchHit hit, bool unreachable, SearchQuery? query)
+        : base(hit, unreachable, query)
+    {
+        var snippet = hit.Snippet ?? new ImageTextSnippet(string.Empty, []);
+        SnippetSegments = snippet.Segments.Count > 0
+            ? snippet.Segments
+            : [new TextSegment(Strings.Get("Hit_NoText"), false)];
+        LastWriteUtc = hit.Details.LastWriteUtc;
+        DateTimeText = hit.Details.LastWriteUtc.ToLocalTime().ToString("g");
+    }
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>The text place, cut into plain and marked pieces; "no text recognized" if the image has none.</summary>
+    public IReadOnlyList<TextSegment> SnippetSegments { get; }
+
+    public DateTime LastWriteUtc { get; }
+
+    /// <summary>Date and time of the image (screenshots of one day differ only in the time).</summary>
+    public string DateTimeText { get; }
+
+    /// <summary>The preview from Windows, or null while it loads or if there is none (then the icon shows).</summary>
+    public ImageSource? Thumbnail
+    {
+        get => _thumbnail;
+        set
+        {
+            _thumbnail = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Thumbnail)));
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Preview)));
+        }
+    }
+
+    /// <summary>What the row shows on the left: the preview, else the file type icon.</summary>
+    public ImageSource? Preview => _thumbnail ?? Icon;
 }
 

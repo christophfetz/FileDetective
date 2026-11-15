@@ -50,6 +50,32 @@ public sealed record StoredHash(int EntryId, long Size, long MTimeTicks, byte[]?
     public bool IsValidFor(long size, long mtimeTicks) => Size == size && MTimeTicks == mtimeTicks;
 }
 
+/// <summary>
+/// A row of <c>ocr</c> (stage 11, PLAN.md 11.3): the text Windows recognized in an image. Valid only while the image still
+/// has <see cref="Size"/> and <see cref="MTimeTicks"/> (last write time, UTC ticks).
+/// </summary>
+public sealed record StoredImageText(int EntryId, long Size, long MTimeTicks, string Text)
+{
+    public bool IsValidFor(long size, long mtimeTicks) => Size == size && MTimeTicks == mtimeTicks;
+
+    /// <summary>
+    /// True if the row still fits the size and the time of the entry in the directory (whole Unix seconds there): checked
+    /// at start without touching the file.
+    /// </summary>
+    public bool MatchesEntry(long entrySize, long entryMTimeUnixSeconds)
+        => Size == entrySize
+            && IndexStore.ToUnixSeconds(new DateTime(Math.Clamp(MTimeTicks, 0, DateTime.MaxValue.Ticks), DateTimeKind.Utc)) == entryMTimeUnixSeconds;
+}
+
+/// <summary>A file written by a change: inserted (with its name) or updated (name null); also a moved or renamed entry.</summary>
+public readonly record struct WrittenFile(int Id, string? Name);
+
+/// <summary>
+/// What one change of the directory did (stage 11, <see cref="IndexStore.Changed"/>): files written, entries removed
+/// (with all descendants), whether an entry was moved or renamed, whether the whole directory was emptied.
+/// </summary>
+public sealed record IndexChange(IReadOnlyList<WrittenFile> Written, IReadOnlyList<int> Deleted, bool Relocated, bool Reset);
+
 /// <summary>A new entry.<see cref="Id"/> comes from <see cref="IndexStore.AllocateId"/>.</summary>
 public readonly record struct EntryInsert(
     int Id, int ParentId, string Name, bool IsDirectory, long Size, long MTimeUnixSeconds, FileAttributes Attributes);

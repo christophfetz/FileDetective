@@ -210,6 +210,51 @@ public sealed partial class MemoryIndex : IDisposable
     }
 
     /// <summary>
+    /// Stage 11: true if the entry is live and one of <paramref name="ancestors"/> is the entry itself or lies on its parent
+    /// chain. Cheap (walks the chain in memory under the read lock); used to decide whether a new file lies in an image text
+    /// folder without asking the database.
+    /// </summary>
+    public bool IsBelowAny(int id, IReadOnlySet<int> ancestors)
+    {
+        ArgumentNullException.ThrowIfNull(ancestors);
+        if (ancestors.Count == 0)
+        {
+            return false;
+        }
+
+        _lock.EnterReadLock();
+        try
+        {
+            if (!TryGetLiveSlot(id, out _))
+            {
+                return false;
+            }
+
+            int current = id;
+            for (int depth = 0; current != 0 && depth < 10_000; depth++)
+            {
+                if (ancestors.Contains(current))
+                {
+                    return true;
+                }
+
+                if (!TryGetLiveSlot(current, out var block))
+                {
+                    return false;
+                }
+
+                current = block[current & BlockMask].Parent;
+            }
+
+            return false;
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
+    }
+
+    /// <summary>
     /// Takes the write lock for a batch of changes; dispose the scope to release it.
     /// Must be disposed on the same thread (ReaderWriterLockSlim has thread affinity).
     /// </summary>

@@ -89,6 +89,24 @@ public sealed record AppSettings
     [JsonPropertyName("hideTechnicalDuplicates")]
     public bool HideTechnicalDuplicates { get; init; } = true;
 
+    /// <summary>
+    /// Stage 11 (PLAN.md 11.3): recognize text in the images of <see cref="OcrFolders"/>. Default off: after an update the
+    /// program must not start reading every screenshot without being asked.
+    /// </summary>
+    [JsonPropertyName("ocrEnabled")]
+    public bool OcrEnabled { get; init; }
+
+    /// <summary>
+    /// Local folders whose images are read for text. Null until the list was set once: then it stands for the Windows
+    /// Screenshots folder (<see cref="ImageTextFolders.Effective"/>).
+    /// </summary>
+    [JsonPropertyName("ocrFolders")]
+    public IReadOnlyList<string>? OcrFolders { get; init; }
+
+    /// <summary>The one-time hint "Search the text in screenshots?" in the search bar was answered (switched on or dismissed).</summary>
+    [JsonPropertyName("ocrHintDismissed")]
+    public bool OcrHintDismissed { get; init; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; init; }
 
@@ -128,8 +146,16 @@ public sealed record AppSettings
     };
 
     /// <summary>The exclusion rules these settings describe; applied at the next scan.</summary>
+    /// <remarks>
+    /// With the image text on, its folders are always recorded like the Start menu folders (PLAN.md 7.3), so a folder
+    /// below an excluded path (e.g. in <c>AppData</c>) still gets its images into the directory.
+    /// </remarks>
     public ExcludeRules CreateExcludeRules()
-        => new(ExcludedFolderNames, ExcludedPaths, ExcludedFileNames, includedPaths: ExcludeRules.AlwaysIncludedPaths);
+        => new(
+            ExcludedFolderNames, ExcludedPaths, ExcludedFileNames,
+            includedPaths: OcrEnabled && OcrFolders is { Count: > 0 } folders
+                ? [.. ExcludeRules.AlwaysIncludedPaths, .. folders]
+                : ExcludeRules.AlwaysIncludedPaths);
 
     /// <summary>
     /// Replaces invalid values by defaults (unknown hotkey, language or politeness; missing lists) and removes blank
@@ -145,6 +171,7 @@ public sealed record AppSettings
         ExcludedPaths = Clean(ExcludedPaths, ExcludeRules.DefaultPaths),
         ExcludedFileNames = Clean(ExcludedFileNames, ExcludeRules.DefaultFileNames),
         DuplicateMinSize = SanitizeMinSize(DuplicateMinSize),
+        OcrFolders = OcrFolders is null ? null : ImageTextFolders.Clean(OcrFolders),
     };
 
     /// <summary>Zero or less (also a missing value) becomes the default; other values are clamped to 1 KB … 1 TB.</summary>

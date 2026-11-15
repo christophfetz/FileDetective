@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
   <resheader name="version"><value>2.0</value></resheader>
@@ -263,4 +263,40 @@ They are replaced by {0}. Continue?</value></data>
   <data name="Dup_GroupTitle" xml:space="preserve"><value>{0:N0} identical files of {1} each · {2} wasted</value></data>
   <data name="Dup_GroupTitleUnchecked" xml:space="preserve"><value>{0:N0} files with the same name and size of {1} each · not checked · up to {2}</value></data>
   <data name="Dup_NoteRemovable" xml:space="preserve"><value>removable drive: compared, but not moved</value></data>
+  <data name="Mode_ImageText" xml:space="preserve"><value>Image text</value></data>
+  <data name="Bar_OcrHint" xml:space="preserve"><value>Search the text in screenshots?</value></data>
+  <data name="Bar_OcrHintEnable" xml:space="preserve"><value>Switch on</value></data>
+  <data name="Bar_OcrHintDismiss" xml:space="preserve"><value>Do not show again</value></data>
+  <data name="Footer_OcrEnabled" xml:space="preserve"><value>Text recognition is on. Press Tab until “Image text” to search your screenshots.</value></data>
+  <data name="Footer_ImageCopied" xml:space="preserve"><value>Image copied to the clipboard.</value></data>
+  <data name="Footer_ImageCopyFailed" xml:space="preserve"><value>Could not copy the image: {0}</value></data>
+  <data name="Footer_ClipboardBusy" xml:space="preserve"><value>The clipboard is busy.</value></data>
+  <data name="Footer_NoTextToCopy" xml:space="preserve"><value>No text was recognized in this image.</value></data>
+  <data name="Footer_TextCopied" xml:space="preserve"><value>Recognized text copied to the clipboard.</value></data>
+  <data name="Footer_ImageKeys" xml:space="preserve"><value>Enter open · Ctrl+Enter folder · Ctrl+C image · Ctrl+Shift+C text</value></data>
+  <data name="Footer_ImageNewest" xml:space="preserve"><value>Newest images: {0:N0} · {1}</value></data>
+  <data name="Footer_ImageHits" xml:space="preserve"><value>{0:N0} hits · {1}</value></data>
+  <data name="Footer_ImageHitsLimited" xml:space="preserve"><value>{0:N0} hits, newest {1:N0} shown · {2}</value></data>
+  <data name="Footer_ImageNoLanguage" xml:space="preserve"><value>Windows has no text recognition language for your profile. See Settings &gt; Image text.</value></data>
+  <data name="Footer_ImageEmpty" xml:space="preserve"><value>No image with recognized text yet · Esc close</value></data>
+  <data name="Ctx_CopyImage" xml:space="preserve"><value>Copy image</value></data>
+  <data name="Ctx_CopyText" xml:space="preserve"><value>Copy recognized text</value></data>
+  <data name="Hit_NoText" xml:space="preserve"><value>No text recognized</value></data>
+  <data name="Section_ImageText" xml:space="preserve"><value>Image text</value></data>
+  <data name="Option_Ocr" xml:space="preserve"><value>Recognize text in images</value></data>
+  <data name="Ocr_Intro" xml:space="preserve"><value>FileDetective can read the text in the images of chosen local folders, such as your screenshots, and find the images by it: press Tab in the search bar until “Image text”. The text recognition built into Windows does this offline, nothing leaves the computer. Images on network shares and files that are only in the cloud are never read.</value></data>
+  <data name="Ocr_NoLanguage" xml:space="preserve"><value>Windows has no text recognition for the languages of your profile, so no image can be read. To add it without administrator rights: Windows Settings &gt; Time &amp; language &gt; Language &amp; region, open the options of your language (or add it) and install “Optical character recognition”. Then restart FileDetective.</value></data>
+  <data name="Button_OpenLanguageSettings" xml:space="preserve"><value>Open language settings</value></data>
+  <data name="Ocr_Folders" xml:space="preserve"><value>Folders whose images are read</value></data>
+  <data name="Ocr_FoldersHint" xml:space="preserve"><value>Only local folders. A folder that lies in no location is added as a location of its own. Removing a folder deletes the recognized text of its images at once; its location stays. Read are PNG, JPEG, BMP, GIF and TIFF files from 5 KB to 50 MB.</value></data>
+  <data name="Ocr_Off" xml:space="preserve"><value>Switched off. No image is read.</value></data>
+  <data name="Ocr_Progress" xml:space="preserve"><value>Image text: {0:N0} of {1:N0} recognized</value></data>
+  <data name="Ocr_Starting" xml:space="preserve"><value>Starting…</value></data>
+  <data name="Confirm_OcrOff" xml:space="preserve"><value>Switch off the text recognition? All recognized texts are deleted. Switching it on again reads the images again.</value></data>
+  <data name="Ocr_MsgOn" xml:space="preserve"><value>Switched on. The images are read in the background.</value></data>
+  <data name="Ocr_MsgOff" xml:space="preserve"><value>Switched off. The recognized texts were deleted.</value></data>
+  <data name="Ocr_MsgNotLocal" xml:space="preserve"><value>Only local folders are possible. Network shares, network drives and removable drives are not read, because every image would have to be opened.</value></data>
+  <data name="Ocr_MsgFolderAdded" xml:space="preserve"><value>{0} added. Its images are read in the background.</value></data>
+  <data name="Ocr_MsgFolderAddedOff" xml:space="preserve"><value>{0} added. Its images are read once the text recognition is switched on.</value></data>
+  <data name="Ocr_MsgFolderRemoved" xml:space="preserve"><value>{0} removed. The recognized text of its images was deleted.</value></data>
 </root>

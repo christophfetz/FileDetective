@@ -65,8 +65,8 @@ public sealed record IndexSearchResult(IReadOnlyList<IndexMatch> Matches, int To
     public static IndexSearchResult Empty { get; } = new([], 0);
 }
 
-/// <summary>One displayed hit.</summary>
-public sealed record SearchHit(int EntryId, EntryDetails Details, int NameLevel, int NameQuality);
+/// <summary>One displayed hit. <see cref="Snippet"/> is set only for hits of mode Image text (stage 11).</summary>
+public sealed record SearchHit(int EntryId, EntryDetails Details, int NameLevel, int NameQuality, ImageTextSnippet? Snippet = null);
 
 /// <summary>The hits in rank order and the total number of matches in the index.</summary>
 public sealed record SearchResult(IReadOnlyList<SearchHit> Hits, int TotalCount)

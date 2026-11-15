@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
   <resheader name="version"><value>2.0</value></resheader>
@@ -263,4 +263,40 @@ Sie werden durch {0} ersetzt. Fortfahren?</value></data>
   <data name="Dup_GroupTitle" xml:space="preserve"><value>{0:N0} gleiche Dateien zu je {1} · {2} verschwendet</value></data>
   <data name="Dup_GroupTitleUnchecked" xml:space="preserve"><value>{0:N0} Dateien mit gleichem Namen und gleicher Größe zu je {1} · nicht geprüft · bis zu {2}</value></data>
   <data name="Dup_NoteRemovable" xml:space="preserve"><value>Wechseldatenträger: verglichen, aber nicht verschoben</value></data>
+  <data name="Mode_ImageText" xml:space="preserve"><value>Bildtext</value></data>
+  <data name="Bar_OcrHint" xml:space="preserve"><value>Text in Screenshots durchsuchen?</value></data>
+  <data name="Bar_OcrHintEnable" xml:space="preserve"><value>Einschalten</value></data>
+  <data name="Bar_OcrHintDismiss" xml:space="preserve"><value>Nicht mehr anzeigen</value></data>
+  <data name="Footer_OcrEnabled" xml:space="preserve"><value>Die Texterkennung ist an. Mit Tab bis „Bildtext“ wechseln, um die Screenshots zu durchsuchen.</value></data>
+  <data name="Footer_ImageCopied" xml:space="preserve"><value>Bild in die Zwischenablage kopiert.</value></data>
+  <data name="Footer_ImageCopyFailed" xml:space="preserve"><value>Das Bild konnte nicht kopiert werden: {0}</value></data>
+  <data name="Footer_ClipboardBusy" xml:space="preserve"><value>Die Zwischenablage ist belegt.</value></data>
+  <data name="Footer_NoTextToCopy" xml:space="preserve"><value>In diesem Bild wurde kein Text erkannt.</value></data>
+  <data name="Footer_TextCopied" xml:space="preserve"><value>Erkannter Text in die Zwischenablage kopiert.</value></data>
+  <data name="Footer_ImageKeys" xml:space="preserve"><value>Enter öffnen · Strg+Enter Ordner · Strg+C Bild · Strg+Umschalt+C Text</value></data>
+  <data name="Footer_ImageNewest" xml:space="preserve"><value>Neueste Bilder: {0:N0} · {1}</value></data>
+  <data name="Footer_ImageHits" xml:space="preserve"><value>{0:N0} Treffer · {1}</value></data>
+  <data name="Footer_ImageHitsLimited" xml:space="preserve"><value>{0:N0} Treffer, die neuesten {1:N0} angezeigt · {2}</value></data>
+  <data name="Footer_ImageNoLanguage" xml:space="preserve"><value>Windows fehlt eine Sprache für die Texterkennung. Siehe Einstellungen &gt; Bildtext.</value></data>
+  <data name="Footer_ImageEmpty" xml:space="preserve"><value>Noch kein Bild mit erkanntem Text · Esc schließen</value></data>
+  <data name="Ctx_CopyImage" xml:space="preserve"><value>Bild kopieren</value></data>
+  <data name="Ctx_CopyText" xml:space="preserve"><value>Erkannten Text kopieren</value></data>
+  <data name="Hit_NoText" xml:space="preserve"><value>Kein Text erkannt</value></data>
+  <data name="Section_ImageText" xml:space="preserve"><value>Bildtext</value></data>
+  <data name="Option_Ocr" xml:space="preserve"><value>Text in Bildern erkennen</value></data>
+  <data name="Ocr_Intro" xml:space="preserve"><value>FileDetective kann den Text in den Bildern ausgewählter lokaler Ordner lesen, etwa in Ihren Screenshots, und die Bilder darüber finden: in der Suchleiste mit Tab bis „Bildtext“ wechseln. Das erledigt die in Windows eingebaute Texterkennung offline, nichts verlässt den Rechner. Bilder auf Netzwerkfreigaben und Dateien, die nur in der Cloud liegen, werden nie gelesen.</value></data>
+  <data name="Ocr_NoLanguage" xml:space="preserve"><value>Windows hat für die Sprachen Ihres Profils keine Texterkennung, deshalb kann kein Bild gelesen werden. So ergänzen Sie sie ohne Administratorrechte: Windows-Einstellungen &gt; Zeit und Sprache &gt; Sprache und Region, die Optionen Ihrer Sprache öffnen (oder die Sprache hinzufügen) und „Optische Zeichenerkennung“ installieren. Danach FileDetective neu starten.</value></data>
+  <data name="Button_OpenLanguageSettings" xml:space="preserve"><value>Spracheinstellungen öffnen</value></data>
+  <data name="Ocr_Folders" xml:space="preserve"><value>Ordner, deren Bilder gelesen werden</value></data>
+  <data name="Ocr_FoldersHint" xml:space="preserve"><value>Nur lokale Ordner. Ein Ordner, der in keinem Ort liegt, wird als eigener Ort hinzugefügt. Das Entfernen eines Ordners löscht den erkannten Text seiner Bilder sofort; der Ort bleibt. Gelesen werden PNG-, JPEG-, BMP-, GIF- und TIFF-Dateien von 5 KB bis 50 MB.</value></data>
+  <data name="Ocr_Off" xml:space="preserve"><value>Ausgeschaltet. Es wird kein Bild gelesen.</value></data>
+  <data name="Ocr_Progress" xml:space="preserve"><value>Bildtext: {0:N0} von {1:N0} erkannt</value></data>
+  <data name="Ocr_Starting" xml:space="preserve"><value>Wird gestartet …</value></data>
+  <data name="Confirm_OcrOff" xml:space="preserve"><value>Texterkennung ausschalten? Alle erkannten Texte werden gelöscht. Beim erneuten Einschalten werden die Bilder neu gelesen.</value></data>
+  <data name="Ocr_MsgOn" xml:space="preserve"><value>Eingeschaltet. Die Bilder werden im Hintergrund gelesen.</value></data>
+  <data name="Ocr_MsgOff" xml:space="preserve"><value>Ausgeschaltet. Die erkannten Texte wurden gelöscht.</value></data>
+  <data name="Ocr_MsgNotLocal" xml:space="preserve"><value>Nur lokale Ordner sind möglich. Netzwerkfreigaben, Netzlaufwerke und Wechseldatenträger werden nicht gelesen, weil dafür jedes Bild geöffnet werden müsste.</value></data>
+  <data name="Ocr_MsgFolderAdded" xml:space="preserve"><value>{0} hinzugefügt. Seine Bilder werden im Hintergrund gelesen.</value></data>
+  <data name="Ocr_MsgFolderAddedOff" xml:space="preserve"><value>{0} hinzugefügt. Seine Bilder werden gelesen, sobald die Texterkennung eingeschaltet ist.</value></data>
+  <data name="Ocr_MsgFolderRemoved" xml:space="preserve"><value>{0} entfernt. Der erkannte Text seiner Bilder wurde gelöscht.</value></data>
 </root>

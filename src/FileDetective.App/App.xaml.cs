@@ -24,6 +24,7 @@ public partial class App : System.Windows.Application
     private UpdateController? _updates;
     private Forms.ToolStripMenuItem? _updateItem;
     private Mutex? _runningMarker;
+    private Thumbnails? _thumbnails;
 
     /// <summary>Start after an update: <c>--restart-after &lt;pid&gt;</c> waits for the old process to end first.</summary>
     private const string RestartAfterArgument = StartupOptions.RestartAfterArgument;
@@ -126,7 +127,14 @@ public partial class App : System.Windows.Application
             },
         };
 
-        var viewModel = new SearchBarViewModel(_index, Dispatcher);
+        // Stage 11: a change of the image text settings (switch, folders) is applied in the background.
+        var indexService = _index;
+        _settings.Changed += changed => indexService.ApplyImageTextAsync().ContinueWith(
+            t => FileLog.Shared.Error("Applying the image text settings failed", t.Exception!), TaskContinuationOptions.OnlyOnFaulted);
+
+        var drives = _services.Drives;
+        _thumbnails = new Thumbnails(Dispatcher, path => drives.Describe(path) is { Kind: RootKind.Local });
+        var viewModel = new SearchBarViewModel(_index, _settings, _thumbnails, Dispatcher);
         _bar = new SearchBarWindow(viewModel);
 
         CreateTrayIcon();
@@ -697,6 +705,8 @@ public partial class App : System.Windows.Application
         _storageWindow?.Close();
         _duplicatesWindow?.Close();
         _bar?.Close();
+        _thumbnails?.Dispose();
+        _thumbnails = null;
         _index?.Dispose();
         _index = null;
         FileLog.Shared.Info("FileDetective stopped.");

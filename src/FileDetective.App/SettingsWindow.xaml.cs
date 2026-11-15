@@ -20,7 +20,10 @@ internal enum SettingsSection
     Locations = 0,
     Exclusions = 1,
     General = 2,
-    About = 3,
+
+    /// <summary>Stage 11: text in images (PLAN.md 11.3).</summary>
+    ImageText = 3,
+    About = 4,
 }
 
 /// <summary>
@@ -64,14 +67,17 @@ public partial class SettingsWindow : Window
         {
             _services.Index.StateChanged += OnIndexStateChanged;
             _services.Updates.Changed += OnUpdatesChanged;
+            _services.Index.ImageTextChanged += OnImageTextChanged;
             _refreshTimer.Start();
             QueueRefresh();
+            RefreshImageText();
         };
         Closed += OnClosed;
 
         WireLocations();
         WireExclusions();
         WireGeneral();
+        WireImageText();
     }
 
     /// <summary>Selects an area (also when the window is already open).</summary>
@@ -99,13 +105,14 @@ public partial class SettingsWindow : Window
         _refreshTimer.Stop();
         _services.Index.StateChanged -= OnIndexStateChanged;
         _services.Updates.Changed -= OnUpdatesChanged;
+        _services.Index.ImageTextChanged -= OnImageTextChanged;
         CommitExclusions(); // a box that still has the focus has not been saved yet
         _services.SuspendHotkey(false);
     }
 
     private void FillTexts()
     {
-        foreach (string key in new[] { "Section_Locations", "Section_Exclusions", "Section_General", "Section_About" })
+        foreach (string key in new[] { "Section_Locations", "Section_Exclusions", "Section_General", "Section_ImageText", "Section_About" })
         {
             Nav.Items.Add(new TextBlock { Text = Strings.Get(key), TextWrapping = TextWrapping.NoWrap });
         }
@@ -153,6 +160,17 @@ public partial class SettingsWindow : Window
         RebuildButton.Content = Strings.Get("Button_Rebuild");
         RebuildHint.Text = Strings.Get("Gen_RebuildHint");
 
+        OcrHeading.Text = Strings.Get("Section_ImageText");
+        OcrIntro.Text = Strings.Get("Ocr_Intro");
+        OcrBox.Content = Strings.Get("Option_Ocr");
+        OcrLanguageText.Text = Strings.Get("Ocr_NoLanguage");
+        OcrLanguageButton.Content = Strings.Get("Button_OpenLanguageSettings");
+        OcrFoldersLabel.Text = Strings.Get("Ocr_Folders");
+        OcrBrowseButton.Content = Strings.Get("Button_Browse");
+        OcrAddButton.Content = Strings.Get("Button_Add");
+        OcrRemoveButton.Content = Strings.Get("Button_Remove");
+        OcrFoldersHint.Text = Strings.Get("Ocr_FoldersHint");
+
         AboutHeading.Text = Strings.Get("Section_About");
         VersionText.Text = LocationUi.Format("About_Version", AppInfo.Version);
         LicenseText.Text = Strings.Get("About_License");
@@ -180,6 +198,7 @@ public partial class SettingsWindow : Window
         LocationsPanel.Visibility = section == SettingsSection.Locations ? Visibility.Visible : Visibility.Collapsed;
         ExclusionsPanel.Visibility = section == SettingsSection.Exclusions ? Visibility.Visible : Visibility.Collapsed;
         GeneralPanel.Visibility = section == SettingsSection.General ? Visibility.Visible : Visibility.Collapsed;
+        ImageTextPanel.Visibility = section == SettingsSection.ImageText ? Visibility.Visible : Visibility.Collapsed;
         AboutPanel.Visibility = section == SettingsSection.About ? Visibility.Visible : Visibility.Collapsed;
         if (section != SettingsSection.Exclusions)
         {
@@ -199,6 +218,7 @@ public partial class SettingsWindow : Window
         LanguageBox.SelectedIndex = (int)s.LanguageChoice;
         UpdatesBox.IsChecked = s.CheckForUpdates;
         PolitenessBox.SelectedIndex = (int)s.NetworkPolitenessLevel;
+        OcrBox.IsChecked = s.OcrEnabled;
         _loadingControls = false;
     }
 
@@ -693,6 +713,157 @@ public partial class SettingsWindow : Window
     {
         HotkeyMessage.Text = text;
         HotkeyMessage.Foreground = warning ? (Brush)FindResource("WarnBrush") : (Brush)FindResource("MutedBrush");
+    }
+
+    // ---------------------------------------------------------------- image text (stage 11, PLAN.md 11.3)
+
+    private void WireImageText()
+    {
+        OcrBox.Click += (_, _) => ChangeImageText(OcrBox.IsChecked == true);
+        OcrBrowseButton.Click += async (_, _) =>
+        {
+            if (LocationUi.PickFolder(this) is { } folder)
+            {
+                OcrPathBox.Text = folder;
+                await AddImageTextFolderAsync(folder);
+            }
+        };
+        OcrAddButton.Click += async (_, _) => await AddImageTextFolderAsync(OcrPathBox.Text);
+        OcrPathBox.KeyDown += async (_, e) =>
+        {
+            if (e.Key == System.Windows.Input.Key.Enter && OcrPathBox.Text.Length > 0)
+            {
+                e.Handled = true;
+                await AddImageTextFolderAsync(OcrPathBox.Text);
+            }
+        };
+        OcrRemoveButton.Click += (_, _) => RemoveImageTextFolder();
+        OcrFolderList.SelectionChanged += (_, _) => OcrRemoveButton.IsEnabled = OcrFolderList.SelectedItem is string;
+        OcrLanguageButton.Click += (_, _) =>
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo("ms-settings:regionlanguage") { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                FileLog.Shared.Error("Opening the language settings failed", ex);
+            }
+        };
+    }
+
+    private void OnImageTextChanged() => Dispatcher.BeginInvoke(new Action(RefreshImageText));
+
+    private IReadOnlyList<string> ImageTextFolderList()
+        => ImageTextFolders.Effective(_services.Settings.Current, KnownFolders.Screenshots);
+
+    /// <summary>Switch, folder list, progress and the hint about a missing recognition language.</summary>
+    private void RefreshImageText()
+    {
+        var settings = _services.Settings.Current;
+        OcrBox.IsChecked = settings.OcrEnabled;
+        string? selected = OcrFolderList.SelectedItem as string;
+        OcrFolderList.ItemsSource = ImageTextFolderList();
+        if (selected is not null)
+        {
+            OcrFolderList.SelectedItem = ImageTextFolderList().FirstOrDefault(f => string.Equals(f, selected, StringComparison.OrdinalIgnoreCase));
+        }
+
+        OcrRemoveButton.IsEnabled = OcrFolderList.SelectedItem is string;
+        bool available = _services.Index.ImageText?.RecognizerAvailable ?? WindowsImageTextRecognizer.AnyLanguageAvailable();
+        OcrLanguagePanel.Visibility = available ? Visibility.Collapsed : Visibility.Visible;
+
+        if (!settings.OcrEnabled)
+        {
+            OcrProgressText.Text = Strings.Get("Ocr_Off");
+        }
+        else if (_services.Index.ImageText is { } service && service.Enabled)
+        {
+            var progress = service.Progress;
+            OcrProgressText.Text = LocationUi.Format("Ocr_Progress", progress.Recognized, progress.Total);
+        }
+        else
+        {
+            OcrProgressText.Text = Strings.Get("Ocr_Starting");
+        }
+    }
+
+    private void ChangeImageText(bool enable)
+    {
+        if (!enable)
+        {
+            var answer = MessageBox.Show(
+                this, Strings.Get("Confirm_OcrOff"), Strings.Get("Settings_Title"),
+                MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
+            if (answer != MessageBoxResult.Yes)
+            {
+                OcrBox.IsChecked = true;
+                return;
+            }
+        }
+
+        SaveSettings(s => s with
+        {
+            OcrEnabled = enable,
+            OcrFolders = s.OcrFolders ?? ImageTextFolders.Effective(s, KnownFolders.Screenshots),
+            OcrHintDismissed = true,
+        });
+        ShowImageTextMessage(Strings.Get(enable ? "Ocr_MsgOn" : "Ocr_MsgOff"), false);
+        RefreshImageText();
+    }
+
+    private async Task AddImageTextFolderAsync(string text)
+    {
+        var current = ImageTextFolderList();
+        switch (ImageTextFolders.Check(text, _services.Drives, current, out string? path))
+        {
+            case ImageFolderCheck.Invalid:
+                ShowImageTextMessage(Strings.Get("Msg_InvalidPath"), true);
+                return;
+            case ImageFolderCheck.NotLocal:
+                ShowImageTextMessage(Strings.Get("Ocr_MsgNotLocal"), true);
+                return;
+            case ImageFolderCheck.AlreadyInList:
+                ShowImageTextMessage(Strings.Get("Msg_AlreadyInList"), true);
+                return;
+        }
+
+        if (path is null || !await LocationUi.DirectoryExistsAsync(path))
+        {
+            ShowImageTextMessage(LocationUi.Format("Msg_NotReachable", path ?? text), true);
+            return;
+        }
+
+        SaveSettings(s => s with { OcrFolders = [.. ImageTextFolders.Effective(s, KnownFolders.Screenshots), path] });
+        OcrPathBox.Clear();
+        ShowImageTextMessage(LocationUi.Format(
+            _services.Settings.Current.OcrEnabled ? "Ocr_MsgFolderAdded" : "Ocr_MsgFolderAddedOff", path), false);
+        RefreshImageText();
+        QueueRefresh();
+    }
+
+    private void RemoveImageTextFolder()
+    {
+        if (OcrFolderList.SelectedItem is not string folder)
+        {
+            return;
+        }
+
+        // The texts of its images are deleted at once (PLAN.md 11.3); the location itself stays.
+        SaveSettings(s => s with
+        {
+            OcrFolders = [.. ImageTextFolders.Effective(s, KnownFolders.Screenshots)
+                .Where(f => !string.Equals(f, folder, StringComparison.OrdinalIgnoreCase))],
+        });
+        ShowImageTextMessage(LocationUi.Format("Ocr_MsgFolderRemoved", folder), false);
+        RefreshImageText();
+    }
+
+    private void ShowImageTextMessage(string text, bool warning)
+    {
+        OcrMessage.Text = text;
+        OcrMessage.Foreground = warning ? (Brush)FindResource("WarnBrush") : (Brush)FindResource("MutedBrush");
+        OcrMessage.Visibility = Visibility.Visible;
     }
 
     private void ChangeAutostart(bool enable)

@@ -152,6 +152,13 @@ public static class DirectoryRenumbering
                 "UPDATE hashes SET entry_id = -(SELECT new_id FROM renumber_map WHERE old_id = hashes.entry_id)");
             Execute(connection, tx, "UPDATE hashes SET entry_id = -entry_id");
 
+            // Stage 11: the image texts follow the same way.
+            Execute(connection, tx, "DELETE FROM ocr WHERE entry_id NOT IN (SELECT old_id FROM renumber_map)");
+            Execute(
+                connection, tx,
+                "UPDATE ocr SET entry_id = -(SELECT new_id FROM renumber_map WHERE old_id = ocr.entry_id)");
+            Execute(connection, tx, "UPDATE ocr SET entry_id = -entry_id");
+
             // Dropping the table also drops its indexes and triggers; EnsureExtensions creates them again.
             Execute(connection, tx, "DROP TABLE entries");
             Execute(connection, tx, "ALTER TABLE entries_new RENAME TO entries");

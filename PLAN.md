@@ -68,8 +68,8 @@ Am 2026-11-13 vom Nutzer bestätigt: der Arbeitsspeicherbedarf nach Abschnitt 6.
 
 ```
 FileDetective.sln
-├─ src/FileDetective.Core/      Klassenbibliothek, net10.0-windows, ohne Oberfläche
-├─ src/FileDetective.App/       WPF-Programm, net10.0-windows, UseWPF + UseWindowsForms
+├─ src/FileDetective.Core/      Klassenbibliothek, net10.0-windows (ab Etappe 11 net10.0-windows10.0.19041.0), ohne Oberfläche
+├─ src/FileDetective.App/       WPF-Programm, ebenso, UseWPF + UseWindowsForms
 ├─ tests/FileDetective.Tests/   xUnit
 ├─ installer/FileDetective.iss  Inno Setup
 ├─ .github/workflows/ci.yml, release.yml
@@ -653,6 +653,21 @@ Abnahme durch Tests:
 
 Gemessen und im Changelog festgehalten: Erkennungsdauer je Screenshot und Größe der `.exe`.
 
+**Umsetzung und Entscheidungen** (Etappe 11, 2026-11-15)
+
+- Aufbau: `ImageText.cs` (`ImageTextRules`, `ImageTextFolders`, `IImageTextRecognizer`, `ImageTextSnippet`, `ImageTextIndex`, `ImageTextSearch`), `ImageTextService.cs` und `WindowsImageTextRecognizer.cs` (dazu `KnownFolders.Screenshots`) in `Core`; in `App` der Bildtext-Teil von `IndexService`, `Interop/Thumbnails`, `ImageHitItem`, der Hinweis in der Suchleiste und der Bereich „Bildtext“ in den Einstellungen (zwischen „Allgemein“ und „Info“).
+- Zielframework `net10.0-windows10.0.19041.0` für App, Core und Tests. Es kam kein NuGet-Paket dazu; das SDK lädt das Targeting Pack `Microsoft.Windows.SDK.NET.Ref` selbst (wie die Laufzeit-Packs). Die Tests nutzen zusätzlich `UseWindowsForms`, um mit System.Drawing Testbilder mit Text zu zeichnen.
+- Einstellungen: `ocrEnabled` (Standard aus), `ocrFolders` (`null` = noch nie gesetzt, steht dann für den Screenshots-Ordner; beim Einschalten wird die Liste fest eingetragen), `ocrHintDismissed`. Der Hinweis in der Suchleiste erscheint im Modus „Alles“ bei jedem Öffnen, bis er beantwortet ist (Einschalten oder „Nicht mehr anzeigen“); „einmalig“ heißt hier: nach der Antwort nie wieder.
+- Ordner: Als lokal gilt nur ein Ordner auf einem Laufwerk der Art „lokal“ laut `DriveDiscovery`; UNC-Pfade, Netzlaufwerke und auch Wechseldatenträger werden abgelehnt (dort gibt es keinen Watcher, und ein Stick ist oft nicht da). Ein Ordner in keinem Ort wird beim Einschalten und beim Hinzufügen eines Ordners (wenn eingeschaltet) als lokaler Ort angelegt; existiert er noch nicht (noch kein Screenshot gemacht), wird das beim nächsten Start nachgeholt. Solange der Bildtext an ist, gelten seine Ordner wie die Startmenü-Ordner als immer aufgenommen (`includedPaths` der `ExcludeRules`), damit z. B. ein Ordner unter `AppData` nicht durch die Ausschlüsse fehlt; liegt ein Ordner in einem Ort, fehlt aber im Verzeichnis, wird dieser Ort einmal neu durchlaufen.
+- Woher die Bilder kommen: `IndexStore` meldet jede Änderung über das Ereignis `Changed` (geschriebene Dateien mit Namen, gelöschte Nummern, Umhängen, Neuaufbau), außerhalb seiner Sperren. Der Bildtext nimmt davon nur Dateien mit Bildendung, deren Elternkette im `MemoryIndex` (`IsBelowAny`) zu einem der Ordner führt. Nach Umhängen oder Umbenennen wird der Abgleich wiederholt (nur Verzeichnis, keine Datei). Beim Einschalten und beim Start werden alle Dateien unter den Ordnern aus dem Verzeichnis gelesen; ein gespeicherter Text gilt, wenn Größe und Datum zum Eintrag passen (Datum in ganzen Sekunden wie `entries.mtime`), ohne dass die Datei angefasst wird.
+- Reihenfolge der Zugriffe je Bild: Name und Cloud-Attribute laut Verzeichnis, Art des Ortes (nur „lokal“), Pfad unter einem Ordner und lokal → aktuelle Angaben aus der Auflistung des Elternordners (`ILocalFileAccess.Probe`, öffnet nicht) → Größe und Cloud-Attribute erneut → gültiger gespeicherter Text (Größe und Ticks) → erst dann `OpenRead` und Erkennung → danach erneut `Probe`; hat sich das Bild beim Lesen geändert, kommt es wieder in die Warteschlange. Als Cloud gelten wie in 11.2 `RecallOnDataAccess`, `Offline` und `RecallOnOpen`.
+- Ein Bild, das Windows nicht dekodieren kann, wird mit leerem Text gespeichert und erst nach einer Änderung neu gelesen; ein gesperrtes oder verschwundenes Bild wird nicht gespeichert und beim nächsten Anlass erneut versucht. Ohne OCR-Sprache bleibt die Warteschlange stehen (kein Bild wird geöffnet), Suchleiste und Einstellungen sagen es; der Hinweis nennt den Weg über Windows-Einstellungen > Zeit und Sprache > Sprache und Region > „Optische Zeichenerkennung“ und hat einen Knopf zu `ms-settings:regionlanguage`.
+- `ocr.mtime` in UTC-Ticks wie `hashes.mtime`. Geschrieben wird ein Text nur, solange der Eintrag existiert und eine Datei ist, unter derselben Sperre wie jedes Löschen. Ein Text wird zusätzlich nur gespeichert, wenn sich die Einstellungen seit Beginn des Lesens nicht geändert haben (Generationszähler), damit nach dem Ausschalten oder Entfernen eines Ordners nichts zurückkommt.
+- Speicher: `ImageTextIndex` hält je Eintrag die Suchform des Textes (Zeilen mit Leerzeichen verbunden) und das Datum; der Originaltext für Textstelle und Strg+Umschalt+C kommt für die angezeigten Treffer aus der Datenbank.
+- Suche: Modus `SearchMode.ImageText`, nur im Tab-Zyklus, solange der Schalter an ist; wird er ausgeschaltet, springt die Leiste auf „Alles“. Typfilter (`.png`) gelten im Bildtext-Modus für den Dateinamen. Treffer müssen noch existieren und in einem der Ordner liegen (geprüft über den aufgelösten Pfad), ein verschobenes Bild fällt also sofort heraus. Die Gesamtzahl ist die Zahl der Texttreffer abzüglich der beim Auflösen verworfenen. Die Textstelle ist höchstens 140 Zeichen lang, beginnt bis zu 40 Zeichen vor dem ersten Treffer, schneidet möglichst an Wortgrenzen und markiert alle Begriffe (`MatchHighlighter`). Die Fußzeile zeigt Trefferzahl und Tasten, ohne Treffer den Fortschritt.
+- Zeile im Bildtext-Modus: 72 Einheiten hoch, Vorschaubild 64 px (in Gerätepixeln angefordert), bis es da ist das Dateisymbol. Strg+C kopiert das Bild als Bild und zusätzlich als Datei (für Programme, die Dateien annehmen); im Kontextmenü stehen „Bild kopieren“ und „Erkannten Text kopieren“ zusätzlich zu „Pfad kopieren“.
+- Ausschalten in den Einstellungen fragt vorher nach, weil es alle Texte löscht; das Einschalten über den Hinweis in der Suchleiste fragt nicht.
+
 **Etappe 12 – Verlauf (normal)**
 
 - Eigenes Fenster „Screenshot-Verlauf“, erreichbar über das Infobereich-Menü. Ein eigenes Tastenkürzel lässt sich in den Einstellungen setzen; ab Werk ist keins belegt.
@@ -678,7 +693,7 @@ Gemessen und im Changelog festgehalten: Erkennungsdauer je Screenshot und Größ
 - [ ] Firmentest
 - [x] Etappe 9 – Speicherplatz
 - [x] Etappe 10 – Dubletten
-- [ ] Etappe 11 – Bildtext
+- [x] Etappe 11 – Bildtext
 - [ ] Etappe 12 – Verlauf
 
 ## 13. Bewusst nicht enthalten

@@ -44,6 +44,49 @@ internal static class ShellActions
         }
     }
 
+    /// <summary>
+    /// Puts a local image on the clipboard (stage 11): as a picture, so it can be pasted into a mail or a ticket, and as a
+    /// file for programs that take files. Returns an error text, or null on success. Only for local images of the image text.
+    /// </summary>
+    public static string? CopyImage(string fullPath)
+    {
+        System.Windows.Media.Imaging.BitmapSource image;
+        try
+        {
+            var bitmap = new System.Windows.Media.Imaging.BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bitmap.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreColorProfile;
+            bitmap.UriSource = new Uri(fullPath, UriKind.Absolute);
+            bitmap.EndInit();
+            bitmap.Freeze();
+            image = bitmap;
+        }
+        catch (Exception ex) when (ex is IOException or NotSupportedException or UnauthorizedAccessException or UriFormatException
+            or InvalidOperationException or ArgumentException or COMException)
+        {
+            return ex.Message;
+        }
+
+        var data = new System.Windows.DataObject();
+        data.SetImage(image);
+        data.SetFileDropList(new System.Collections.Specialized.StringCollection { fullPath });
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                System.Windows.Clipboard.SetDataObject(data, copy: true);
+                return null;
+            }
+            catch (COMException)
+            {
+                Thread.Sleep(30);
+            }
+        }
+
+        return Strings.Get("Footer_ClipboardBusy");
+    }
+
     /// <summary>Puts the text on the clipboard; the clipboard can be locked by another program, so it retries briefly.</summary>
     public static bool CopyText(string text)
     {

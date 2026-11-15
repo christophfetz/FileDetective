@@ -68,6 +68,23 @@ public sealed class IndexDatabase : IDisposable
         END;
         """;
 
+    /// <summary>Name of the trigger that removes the image text of deleted entries.</summary>
+    internal const string OcrTrigger = "tr_entries_delete_ocr";
+
+    // Stage 11 (PLAN.md 11.3). mtime in UTC ticks like hashes.mtime; text is the recognized text as Windows returns it.
+    private const string OcrExtensionSql = """
+        CREATE TABLE IF NOT EXISTS ocr(
+          entry_id INTEGER PRIMARY KEY,
+          size INTEGER NOT NULL,
+          mtime INTEGER NOT NULL,
+          text TEXT NOT NULL
+        );
+        CREATE TRIGGER IF NOT EXISTS tr_entries_delete_ocr AFTER DELETE ON entries
+        BEGIN
+          DELETE FROM ocr WHERE entry_id = old.id;
+        END;
+        """;
+
     private const int SqliteBusy = 5;
     private const int SqliteLocked = 6;
 
@@ -156,18 +173,30 @@ public sealed class IndexDatabase : IDisposable
     /// True only for the renumbering, which has already moved the hashes to the new numbers and recreates the trigger
     /// after rebuilding the table: the hashes are then kept.
     /// </param>
+    /// <remarks>
+    /// Stage 11 adds the table <c>ocr</c> with the trigger <c>tr_entries_delete_ocr</c> in the same way and under the same
+    /// rule: a table without its trigger loses its rows (an older version without the trigger has renumbered).
+    /// </remarks>
     public static void EnsureExtensions(SqliteConnection connection, SqliteTransaction transaction, bool hashesAreMapped = false)
     {
         ArgumentNullException.ThrowIfNull(connection);
         bool hadTable = Exists(connection, transaction, "table", "hashes");
         bool hadTrigger = Exists(connection, transaction, "trigger", HashTrigger);
+        bool hadOcrTable = Exists(connection, transaction, "table", "ocr");
+        bool hadOcrTrigger = Exists(connection, transaction, "trigger", OcrTrigger);
         using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = ExtensionSql;
+        command.CommandText = ExtensionSql + OcrExtensionSql;
         command.ExecuteNonQuery();
         if (hadTable && !hadTrigger && !hashesAreMapped)
         {
             command.CommandText = "DELETE FROM hashes";
+            command.ExecuteNonQuery();
+        }
+
+        if (hadOcrTable && !hadOcrTrigger && !hashesAreMapped)
+        {
+            command.CommandText = "DELETE FROM ocr";
             command.ExecuteNonQuery();
         }
     }

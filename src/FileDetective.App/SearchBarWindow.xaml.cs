@@ -31,6 +31,8 @@ public partial class SearchBarWindow : Window
         OpenMenuItem.Header = Strings.Get("Ctx_Open");
         RevealMenuItem.Header = Strings.Get("Ctx_Reveal");
         CopyMenuItem.Header = Strings.Get("Ctx_CopyPath");
+        CopyImageMenuItem.Header = Strings.Get("Ctx_CopyImage");
+        CopyTextMenuItem.Header = Strings.Get("Ctx_CopyText");
 
         // Create the window handle now so that showing the bar later is fast (no handle creation on first use).
         new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle();
@@ -70,6 +72,20 @@ public partial class SearchBarWindow : Window
         OpenMenuItem.Click += async (_, _) => await _viewModel.OpenSelectedAsync();
         RevealMenuItem.Click += async (_, _) => await _viewModel.RevealSelectedAsync();
         CopyMenuItem.Click += (_, _) => _viewModel.CopySelectedPath();
+        CopyImageMenuItem.Click += (_, _) => _viewModel.CopySelectedImage();
+        CopyTextMenuItem.Click += async (_, _) => await _viewModel.CopySelectedTextAsync();
+        HintEnableButton.Click += (_, _) =>
+        {
+            _viewModel.EnableImageText();
+            FocusInput();
+        };
+        HintDismissButton.Click += (_, _) =>
+        {
+            _viewModel.DismissImageTextHint();
+            FocusInput();
+        };
+        DpiChanged += (_, e) => _viewModel.PixelsPerDip = e.NewDpi.PixelsPerDip;
+        Loaded += (_, _) => _viewModel.PixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
     }
 
     /// <summary>Toggles the bar: shown on the monitor under the mouse pointer with the focus in the input box, or hidden.</summary>
@@ -225,10 +241,25 @@ public partial class SearchBarWindow : Window
                 _viewModel.CycleMode(reverse: shift);
                 break;
 
+            case Key.C when ctrl && shift && !alt && _viewModel.SelectedIsImage:
+                // Mode Image text: Ctrl+Shift+C copies the recognized text (PLAN.md 11.3).
+                e.Handled = true;
+                await _viewModel.CopySelectedTextAsync();
+                break;
+
             case Key.C when ctrl && !shift && !alt && InputBox.SelectionLength == 0 && _viewModel.SelectedItem is not null:
                 // Only when no text is selected in the input box; otherwise the box copies its selection as usual.
+                // Mode Image text copies the image itself.
                 e.Handled = true;
-                _viewModel.CopySelectedPath();
+                if (_viewModel.SelectedIsImage)
+                {
+                    _viewModel.CopySelectedImage();
+                }
+                else
+                {
+                    _viewModel.CopySelectedPath();
+                }
+
                 break;
         }
     }
@@ -262,6 +293,9 @@ public partial class SearchBarWindow : Window
         bool canOpen = _viewModel.CanOpenSelected;
         OpenMenuItem.IsEnabled = canOpen;
         RevealMenuItem.IsEnabled = canOpen;
+        var imageItems = _viewModel.SelectedIsImage ? Visibility.Visible : Visibility.Collapsed;
+        CopyImageMenuItem.Visibility = imageItems;
+        CopyTextMenuItem.Visibility = imageItems;
     }
 
     private static ListBoxItem? ItemUnder(DependencyObject? source)

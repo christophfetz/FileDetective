@@ -13,14 +13,17 @@ public sealed class SearchEngine
     private readonly MemoryIndex _index;
     private readonly IEntryResolver _resolver;
     private readonly IUsageLookup _usage;
+    private readonly ImageTextSearch? _imageText;
 
-    public SearchEngine(MemoryIndex index, IEntryResolver resolver, IUsageLookup? usage = null)
+    /// <param name="imageText">Search of mode Image text (stage 11); without it that mode has no hits.</param>
+    public SearchEngine(MemoryIndex index, IEntryResolver resolver, IUsageLookup? usage = null, ImageTextSearch? imageText = null)
     {
         ArgumentNullException.ThrowIfNull(index);
         ArgumentNullException.ThrowIfNull(resolver);
         _index = index;
         _resolver = resolver;
         _usage = usage ?? NoUsage.Instance;
+        _imageText = imageText;
     }
 
     /// <summary>Searches for <paramref name="input"/>. Throws <see cref="OperationCanceledException"/> when cancelled.</summary>
@@ -36,6 +39,12 @@ public sealed class SearchEngine
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(max, 1);
         cancellationToken.ThrowIfCancellationRequested();
+        if (mode == SearchMode.ImageText)
+        {
+            // PLAN.md 11.3: an empty input in mode Image text shows the newest images.
+            return _imageText?.Search(SearchQuery.Parse(null, mode), max, cancellationToken) ?? SearchResult.Empty;
+        }
+
         if (_usage is not IRecentUsage recent)
         {
             return SearchResult.Empty;
@@ -76,6 +85,7 @@ public sealed class SearchEngine
         SearchMode.Files => !d.IsDirectory,
         SearchMode.Folders => d.IsDirectory,
         SearchMode.Programs => !d.IsDirectory && MemoryIndex.IsProgramPath(d.FullPath),
+        SearchMode.ImageText => false,
         _ => true,
     };
 
@@ -84,6 +94,14 @@ public sealed class SearchEngine
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
+        if (query.Mode == SearchMode.ImageText)
+        {
+            // Image text hits come only from the recognized texts and only in this mode (PLAN.md 11.3).
+            return query.IsEmpty
+                ? RecentlyOpened(SearchMode.ImageText, MaxResults, cancellationToken)
+                : _imageText?.Search(query, MaxResults, cancellationToken) ?? SearchResult.Empty;
+        }
+
         if (query.IsEmpty)
         {
             // The UI shows the recently opened entries for an empty input (stage 7), not the search.

@@ -209,6 +209,40 @@
           </StackPanel>
         </ScrollViewer>
 
+        <!-- Image text (stage 11, PLAN.md 11.3) -->
+        <ScrollViewer x:Name="ImageTextPanel" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+          <StackPanel Margin="0,0,10,0">
+            <TextBlock x:Name="OcrHeading" Style="{StaticResource HeadingText}" />
+            <TextBlock x:Name="OcrIntro" Style="{StaticResource MutedText}" Margin="0,6,0,0" />
+            <CheckBox x:Name="OcrBox" Margin="0,14,0,0" />
+            <TextBlock x:Name="OcrProgressText" Margin="0,8,0,0" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+            <Border x:Name="OcrLanguagePanel" Margin="0,10,0,0" Padding="12,8" CornerRadius="6"
+                    Background="{StaticResource ChipBrush}" Visibility="Collapsed">
+              <StackPanel>
+                <TextBlock x:Name="OcrLanguageText" TextWrapping="Wrap" Foreground="{StaticResource WarnBrush}" />
+                <Button x:Name="OcrLanguageButton" HorizontalAlignment="Left" Margin="0,8,0,0" />
+              </StackPanel>
+            </Border>
+            <TextBlock x:Name="OcrFoldersLabel" Style="{StaticResource LabelText}" />
+            <ListBox x:Name="OcrFolderList" Height="120" BorderThickness="0,1,0,1" BorderBrush="{StaticResource BorderBrushSoft}"
+                     Background="Transparent" ItemContainerStyle="{StaticResource ItemRowStyle}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
+            <Grid Margin="0,10,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBox x:Name="OcrPathBox" Margin="0,0,8,0" />
+              <Button x:Name="OcrBrowseButton" Grid.Column="1" />
+              <Button x:Name="OcrAddButton" Grid.Column="2" Margin="0" />
+            </Grid>
+            <Button x:Name="OcrRemoveButton" HorizontalAlignment="Left" Margin="0,10,0,0" />
+            <TextBlock x:Name="OcrMessage" Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed" />
+            <TextBlock x:Name="OcrFoldersHint" Style="{StaticResource MutedText}" Margin="0,10,0,0" />
+          </StackPanel>
+        </ScrollViewer>
+
         <!-- About -->
         <ScrollViewer x:Name="AboutPanel" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
           <StackPanel Margin="0,0,10,0">

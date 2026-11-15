@@ -30,11 +30,22 @@ public static class BarState
         return scanPendingOrRunning && !anyScanEverCompleted ? IndexPhase.FirstScan : IndexPhase.Ready;
     }
 
-    /// <summary>Next mode for Tab (<paramref name="reverse"/> false) or Shift+Tab: All, Files, Folders, Programs, then around.</summary>
-    public static SearchMode CycleMode(SearchMode mode, bool reverse)
+    /// <summary>
+    /// Next mode for Tab (<paramref name="reverse"/> false) or Shift+Tab: All, Files, Folders, Programs, then Image text
+    /// if <paramref name="imageText"/> is true (the image text is switched on, PLAN.md 11.3), then around. A mode outside
+    /// the cycle (Image text after switching off) continues with All.
+    /// </summary>
+    public static SearchMode CycleMode(SearchMode mode, bool reverse, bool imageText = false)
     {
-        int count = Enum.GetValues<SearchMode>().Length;
-        int next = ((int)mode + (reverse ? count - 1 : 1)) % count;
-        return (SearchMode)next;
+        SearchMode[] cycle = imageText
+            ? [SearchMode.All, SearchMode.Files, SearchMode.Folders, SearchMode.Programs, SearchMode.ImageText]
+            : [SearchMode.All, SearchMode.Files, SearchMode.Folders, SearchMode.Programs];
+        int at = Array.IndexOf(cycle, mode);
+        if (at < 0)
+        {
+            return SearchMode.All;
+        }
+
+        return cycle[(at + (reverse ? cycle.Length - 1 : 1)) % cycle.Length];
     }
 }

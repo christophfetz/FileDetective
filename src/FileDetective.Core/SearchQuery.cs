@@ -14,6 +14,12 @@ public enum SearchMode
     /// package folder (<see cref="DuplicateFilter.TechnicalFolderNames"/>) does not count (PLAN.md 6.4).
     /// </summary>
     Programs,
+
+    /// <summary>
+    /// Stage 11 (PLAN.md 11.3): images whose recognized text contains every term, newest first. Only reachable while the
+    /// image text is switched on; its hits never appear in any other mode.
+    /// </summary>
+    ImageText,
 }
 
 /// <summary>

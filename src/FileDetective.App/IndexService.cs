@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net.NetworkInformation;
 using FileDetective.Core;
 
@@ -30,6 +31,9 @@ internal sealed class IndexService : IDisposable
     private ScanExecutor? _executor;
     private RefreshScheduler? _scheduler;
     private LocalWatcher? _watcher;
+    private ImageTextService? _imageText;
+    private readonly SemaphoreSlim _imageTextGate = new(1, 1);
+    private (bool Enabled, string Folders)? _imageTextApplied;
     private Task? _loadWork;
     private volatile bool _loaded;
     private volatile bool _anyScanCompleted;
@@ -63,6 +67,12 @@ internal sealed class IndexService : IDisposable
     public IndexStore? Store => _store;
 
     public UsageTracker? Usage => _usage;
+
+    /// <summary>The image text (stage 11); null until the directory is loaded.</summary>
+    public ImageTextService? ImageText => _imageText;
+
+    /// <summary>Raised on a background thread when the progress of the image text changed.</summary>
+    public event Action? ImageTextChanged;
 
     public bool IsLoaded => _loaded;
 
@@ -120,7 +130,32 @@ internal sealed class IndexService : IDisposable
             _store = store;
             var usage = new UsageTracker(database, store);
             _usage = usage;
-            var engine = new SearchEngine(index, new DatabaseEntryResolver(database), usage);
+            var resolver = new DatabaseEntryResolver(database);
+            var texts = new ImageTextIndex();
+            var drives = new DriveDiscovery();
+            var imageText = new ImageTextService(
+                store, index, texts, new WindowsImageTextRecognizer(), SystemLocalFileAccess.Instance, resolver,
+                new ImageTextServiceOptions
+                {
+                    // PLAN.md 2.1: only images on local drives are ever opened.
+                    IsLocalPath = path => drives.Describe(path) is { Kind: RootKind.Local },
+                    Log = (message, ex) =>
+                    {
+                        if (ex is null)
+                        {
+                            FileLog.Shared.Info(message);
+                        }
+                        else
+                        {
+                            FileLog.Shared.Error(message, ex);
+                        }
+                    },
+                });
+            imageText.ProgressChanged += RaiseImageTextChanged;
+            _imageText = imageText;
+            var engine = new SearchEngine(
+                index, resolver, usage,
+                new ImageTextSearch(texts, resolver, store.GetImageTexts, () => imageText.Folders));
 
             var timer = System.Diagnostics.Stopwatch.StartNew();
             int loaded = store.LoadIntoMemory(token);
@@ -172,6 +207,9 @@ internal sealed class IndexService : IDisposable
             _networkSubscribed = true;
 
             RaiseStateChanged();
+
+            // Stage 11: with the image text on, missing and invalid texts are fetched in the background.
+            _ = ApplyImageTextAsync();
         }
         catch (OperationCanceledException)
         {
@@ -435,6 +473,106 @@ internal sealed class IndexService : IDisposable
         }
     }
 
+    // ---------------------------------------------------------------- image text (stage 11, PLAN.md 11.3)
+
+    /// <summary>
+    /// Applies the image text settings if they changed since the last call: switching off deletes the stored texts,
+    /// switching on (or a new folder) adds every folder that lies in no location as a local location of its own (like the
+    /// Start menu folders, PLAN.md 7.3) and starts the reading in the background. Runs on the thread pool; calls are
+    /// serialized. Never throws (failures are logged).
+    /// </summary>
+    public async Task ApplyImageTextAsync()
+    {
+        if (_imageText is not { } service || _store is not { } store)
+        {
+            return;
+        }
+
+        await _imageTextGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await Task.Run(() =>
+            {
+                var settings = _settings();
+                var folders = ImageTextFolders.Effective(settings, KnownFolders.Screenshots);
+                var key = (settings.OcrEnabled, string.Join('|', folders));
+                if (_imageTextApplied == key)
+                {
+                    return;
+                }
+
+                if (settings.OcrEnabled)
+                {
+                    EnsureImageTextLocations(store, folders);
+                }
+
+                service.Configure(settings.OcrEnabled, folders);
+                _imageTextApplied = key;
+                FileLog.Shared.Info(settings.OcrEnabled
+                    ? $"Image text on for {folders.Count} folders: {string.Join(", ", folders)}"
+                    : "Image text off.");
+            }).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            FileLog.Shared.Error("Applying the image text settings failed", ex);
+        }
+        finally
+        {
+            _imageTextGate.Release();
+            RaiseImageTextChanged();
+        }
+    }
+
+    /// <summary>
+    /// Every image text folder that lies in no location and exists becomes a local location. A folder that lies in a
+    /// location but is not in the directory (it was excluded so far) gets its location scanned again.
+    /// </summary>
+    private void EnsureImageTextLocations(IndexStore store, IReadOnlyList<string> folders)
+    {
+        foreach (string path in ImageTextFolders.MissingLocations(folders, store.GetRoots(), Directory.Exists))
+        {
+            var candidate = new LocationCandidate(path, null, RootKind.Local);
+            if (LocationRules.Check(candidate, store.GetRoots()).Result == LocationCheckResult.Free)
+            {
+                AddLocation(candidate);
+            }
+        }
+
+        var rescan = new HashSet<byte>();
+        foreach (string folder in folders)
+        {
+            if (store.FindEntryId(folder) is null && Directory.Exists(folder))
+            {
+                var holder = store.GetRoots()
+                    .Where(r => LocationRules.Normalize(r.Path) is { } root && LocationRules.ContainsOrEquals(root, folder))
+                    .OrderByDescending(r => r.Path.Length)
+                    .FirstOrDefault();
+                if (holder is { LastScanStatus: not ScanStatus.Never })
+                {
+                    rescan.Add(holder.Id);
+                }
+            }
+        }
+
+        if (rescan.Count > 0)
+        {
+            StartScan(rescan);
+        }
+    }
+
+    private void RaiseImageTextChanged()
+    {
+        try
+        {
+            ImageTextChanged?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            FileLog.Shared.Error("An image text listener failed", ex);
+        }
+    }
+
     private void RefreshRoots(IndexStore store)
         => _roots = store.GetRoots().ToDictionary(r => r.Id);
 
@@ -482,6 +620,9 @@ internal sealed class IndexService : IDisposable
         {
             // Already logged.
         }
+
+        // The image text stops first: it waits up to 5 s for the image being read.
+        _imageText?.Dispose();
 
         // The watcher and the scanner check their tokens between directories; both wait briefly so no batch is cut
         // off mid-write.

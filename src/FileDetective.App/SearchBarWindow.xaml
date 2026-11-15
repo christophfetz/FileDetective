@@ -84,6 +84,29 @@
         </DataTrigger>
       </DataTemplate.Triggers>
     </DataTemplate>
+
+    <!-- Mode Image text (PLAN.md 11.3): preview from Windows, name, text place around the first hit, date and time. -->
+    <DataTemplate DataType="{x:Type vm:ImageHitItem}">
+      <Grid Height="72">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="76" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="110" />
+        </Grid.ColumnDefinitions>
+        <Border Width="64" Height="64" CornerRadius="4" Background="{StaticResource ChipBrush}" HorizontalAlignment="Left">
+          <Image Source="{Binding Preview}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
+                 MaxWidth="64" MaxHeight="64" />
+        </Border>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+          <TextBlock local:Highlight.Segments="{Binding NameSegments}" Foreground="{StaticResource TextBrush}"
+                     TextTrimming="CharacterEllipsis" />
+          <TextBlock local:Highlight.Segments="{Binding SnippetSegments}" Foreground="{StaticResource MutedBrush}"
+                     FontSize="12" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="34" Margin="0,2,0,0" />
+        </StackPanel>
+        <TextBlock Grid.Column="2" Text="{Binding DateTimeText}" Foreground="{StaticResource MutedBrush}"
+                   FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" />
+      </Grid>
+    </DataTemplate>
   </Window.Resources>
 
   <Border Margin="16" CornerRadius="12" Background="{StaticResource SurfaceBrush}"
@@ -93,6 +116,7 @@
     </Border.Effect>
     <Grid>
       <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
@@ -137,11 +161,30 @@
         </Border>
       </Grid>
 
-      <Border Grid.Row="1" Height="1" Background="{StaticResource BorderBrushSoft}"
+      <!-- One-time hint (PLAN.md 11.3): only in mode All while the image text was never switched on or dismissed. -->
+      <Border Grid.Row="1" Margin="16,0,16,10" Padding="12,6" CornerRadius="6" Background="{StaticResource AccentSoftBrush}"
+              Visibility="{Binding ShowImageTextHint, Converter={StaticResource BoolToVisibility}}">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="{Binding ImageTextHintText}" Foreground="{StaticResource TextBrush}" FontSize="12"
+                     VerticalAlignment="Center" TextWrapping="Wrap" />
+          <Button x:Name="HintEnableButton" Grid.Column="1" Content="{Binding ImageTextHintEnable}" Margin="12,0,0,0"
+                  Padding="10,2" Focusable="False" />
+          <Button x:Name="HintDismissButton" Grid.Column="2" Content="&#xE711;" ToolTip="{Binding ImageTextHintDismiss}"
+                  FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" Margin="6,0,0,0" Padding="6,4"
+                  Background="Transparent" BorderThickness="0" Focusable="False" />
+        </Grid>
+      </Border>
+
+      <Border Grid.Row="2" Height="1" Background="{StaticResource BorderBrushSoft}"
               Visibility="{Binding HasHits, Converter={StaticResource BoolToVisibility}}" />
 
       <!-- Hit list: virtualized, at most 100 rows, 8 rows visible. -->
-      <ListBox x:Name="HitList" Grid.Row="2" ItemsSource="{Binding Hits}" SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
+      <ListBox x:Name="HitList" Grid.Row="3" ItemsSource="{Binding Hits}" SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
                ItemContainerStyle="{StaticResource HitItemStyle}" BorderThickness="0" Background="Transparent"
                Margin="8,6,8,6" MaxHeight="288" Focusable="False"
                VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.ScrollUnit="Item"
@@ -152,11 +195,13 @@
             <MenuItem x:Name="OpenMenuItem" />
             <MenuItem x:Name="RevealMenuItem" />
             <MenuItem x:Name="CopyMenuItem" />
+            <MenuItem x:Name="CopyImageMenuItem" />
+            <MenuItem x:Name="CopyTextMenuItem" />
           </ContextMenu>
         </ListBox.ContextMenu>
       </ListBox>
 
-      <Border Grid.Row="3" BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="0,1,0,0" Padding="16,8">
+      <Border Grid.Row="4" BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="0,1,0,0" Padding="16,8">
         <TextBlock Text="{Binding FooterText}" Foreground="{StaticResource MutedBrush}" FontSize="12"
                    TextTrimming="CharacterEllipsis" />
       </Border>

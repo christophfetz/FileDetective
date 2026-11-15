@@ -31,8 +31,9 @@ public sealed partial class MemoryIndex
         ArgumentNullException.ThrowIfNull(query);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxResults, 1);
         cancellationToken.ThrowIfCancellationRequested();
-        if (query.IsEmpty)
+        if (query.IsEmpty || query.Mode == SearchMode.ImageText)
         {
+            // Image text hits come from the ImageTextIndex, never from the names (PLAN.md 11.3).
             return IndexSearchResult.Empty;
         }
 
