@@ -679,6 +679,17 @@ Gemessen und im Changelog festgehalten: Erkennungsdauer je Screenshot und Größ
   - den erkannten Text in einem Seitenbereich anzeigen.
 - Kein Löschen in diesem Fenster.
 
+**Umsetzung und Entscheidungen** (Etappe 12, 2026-11-15)
+
+- Aufbau: `ImageHistory.cs` in `Core` (`HistoryImage`, `IImageHistorySource`/`StoreImageHistorySource`, `ImageHistory` mit `Load` und `Filter`, `HistoryLayout`, `HistoryRowMap`, `RefreshThrottle`, `HotkeyRules`); in `App` `HistoryWindow`, `HistoryGridView`, `ViewModels/HistoryRows`, Erweiterung von `Thumbnails`, `IndexService.History`/`HistoryChanged`/`HistoryFolders`. Das Fenster öffnet sich über „Screenshot-Verlauf …“ im Infobereich-Menü, es gibt höchstens eines; das Kürzel schaltet um (offen und vorn: schließt).
+- Schalter aus: Das Fenster zeigt die Bilder der Ordner aus `ocrFolders` (solange die Liste nie gesetzt wurde: der Screenshots-Ordner) trotzdem, wenn sie im Verzeichnis sind (Ordner werden nur beim Einschalten zu Orten, vorher ist die Liste also oft leer). Die Texte fehlen dann, die Suche ist abgeschaltet, ein Hinweis bietet „Einschalten“ (wie der Hinweis der Suchleiste). Es wird dabei nie ein Bild geöffnet.
+- Welche Bilder: lokale Orte, Bilder, die die Texterkennung liest oder läse (Endung, 5 KB bis 50 MB, kein `*.thumb.jpg`), dazu Cloud-Dateien mit Platzhalter ohne Vorschau und ohne „Bild kopieren“. Gehört ein Bild zu verschachtelten Ordnern, zählt der tiefste. Lesen aus dem Verzeichnis: eine Abfrage je Ordner (`ReadFilesBelow`), Pfade über die Elternordner; es wird nichts aufgelistet.
+- Gruppierung nach Kalendertagen der lokalen Zeitzone (als Parameter, im Test fest), neueste zuerst, bei gleicher Zeit höhere Eintragsnummer zuerst. Zeilen: Tageskopf plus Reihen aus Vorschaubildern mit fester Höhe (40 und 132 Einheiten); das Fenster erzeugt nur die Zeilen im Sichtbereich (eigene Virtualisierung, damit Scrollposition und „Bild in den Sichtbereich“ exakt sind).
+- Vorschaubilder: eigener `Thumbnails` je Fenster mit 600 Einträgen, zuletzt angefragtes zuerst, verworfen, wenn die Zeile weggescrollt ist; auf die angefragte Größe verkleinert (Windows liefert mit `BiggerSizeOk` bis 1.000 px).
+- Aktualisierung: Änderungen im Verzeichnis (`IsRelevant`) und der Fortschritt des Bildtexts lösen `RefreshThrottle` aus (höchstens alle 2 s, der erste Auslöser nach Ruhe sofort, spätere werden zu einem Lauf am Intervallende). Die Liste bleibt nur dann unverändert, wenn sich nichts geändert hat; sonst wird neu aufgebaut und das Bild am oberen Rand samt Versatz wieder angesteuert (ganz oben: bleibt oben), die Auswahl bleibt, solange das Bild in der Liste ist. Suche und Ordnerfilter setzen nach oben zurück. Der Text im Seitenbereich wird nur neu gebaut, wenn sich sein Inhalt ändert, damit eine Markierung beim Aktualisieren nicht verloren geht.
+- Kürzel: Einstellung `historyHotkey` (leer = keins), im Bereich „Bildtext“ der Einstellungen mit „Entfernen“. Ein zweiter `HotkeyManager`; gleiches Kürzel wie die Suchleiste wird in beide Richtungen abgelehnt (Einstellungsfenster, `App`, `AppSettings.Sanitized`). Ein beim Start nicht registrierbares Kürzel wird nur gemeldet.
+- Öffnen und Im-Explorer-zeigen prüfen wie die Suchleiste mit `ExistenceCheck`; ein verschwundenes Bild wird aus dem Verzeichnis entfernt (das ist kein Löschen einer Datei).
+
 ## 12. Stand
 
 - [x] Etappe 0 – Projektgerüst
@@ -694,7 +705,7 @@ Gemessen und im Changelog festgehalten: Erkennungsdauer je Screenshot und Größ
 - [x] Etappe 9 – Speicherplatz
 - [x] Etappe 10 – Dubletten
 - [x] Etappe 11 – Bildtext
-- [ ] Etappe 12 – Verlauf
+- [x] Etappe 12 – Verlauf
 
 ## 13. Bewusst nicht enthalten
 

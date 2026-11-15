@@ -78,6 +78,7 @@ public partial class SettingsWindow : Window
         WireExclusions();
         WireGeneral();
         WireImageText();
+        WireHistoryHotkey();
     }
 
     /// <summary>Selects an area (also when the window is already open).</summary>
@@ -170,6 +171,9 @@ public partial class SettingsWindow : Window
         OcrAddButton.Content = Strings.Get("Button_Add");
         OcrRemoveButton.Content = Strings.Get("Button_Remove");
         OcrFoldersHint.Text = Strings.Get("Ocr_FoldersHint");
+        HistoryHotkeyLabel.Text = Strings.Get("Hist_HotkeyLabel");
+        HistoryHotkeyClearButton.Content = Strings.Get("Button_Remove");
+        HistoryHotkeyHint.Text = Strings.Get("Hist_HotkeyHint");
 
         AboutHeading.Text = Strings.Get("Section_About");
         VersionText.Text = LocationUi.Format("About_Version", AppInfo.Version);
@@ -219,6 +223,7 @@ public partial class SettingsWindow : Window
         UpdatesBox.IsChecked = s.CheckForUpdates;
         PolitenessBox.SelectedIndex = (int)s.NetworkPolitenessLevel;
         OcrBox.IsChecked = s.OcrEnabled;
+        ShowHistoryHotkey(s.HistoryHotkeyValue);
         _loadingControls = false;
     }
 
@@ -695,6 +700,14 @@ public partial class SettingsWindow : Window
     private void ChangeHotkey(HotkeyGesture gesture)
     {
         string text = gesture.Format(CultureInfo.CurrentUICulture);
+        if (HotkeyRules.Conflicts(gesture, _services.Settings.Current.HistoryHotkeyValue))
+        {
+            // The shortcut of the screenshot history: both would fight for the same keys.
+            HotkeyBox.Show(_services.Settings.Current.HotkeyValue);
+            ShowHotkeyMessage(LocationUi.Format("Hist_HotkeyConflictSearch", text), true);
+            return;
+        }
+
         string? error = _services.TryApplyHotkey(gesture);
         if (error is not null)
         {
@@ -713,6 +726,78 @@ public partial class SettingsWindow : Window
     {
         HotkeyMessage.Text = text;
         HotkeyMessage.Foreground = warning ? (Brush)FindResource("WarnBrush") : (Brush)FindResource("MutedBrush");
+    }
+
+    // ---------------------------------------------------------------- shortcut of the screenshot history (stage 12)
+
+    private void WireHistoryHotkey()
+    {
+        HistoryHotkeyBox.GotKeyboardFocus += (_, _) =>
+        {
+            _services.SuspendHotkey(true);
+            ShowHistoryHotkeyMessage(Strings.Get("Hotkey_Press"), false);
+        };
+        HistoryHotkeyBox.LostKeyboardFocus += (_, _) =>
+        {
+            _services.SuspendHotkey(false);
+            HistoryHotkeyMessage.Text = string.Empty;
+        };
+        HistoryHotkeyBox.Captured += gesture => ChangeHistoryHotkey(gesture);
+        HistoryHotkeyBox.Rejected += () => ShowHistoryHotkeyMessage(Strings.Get("Hotkey_Invalid"), true);
+        HistoryHotkeyClearButton.Click += (_, _) => ChangeHistoryHotkey(null);
+    }
+
+    private void ShowHistoryHotkey(HotkeyGesture? gesture)
+    {
+        if (gesture is { } set)
+        {
+            HistoryHotkeyBox.Show(set);
+        }
+        else
+        {
+            HistoryHotkeyBox.Text = Strings.Get("Hist_HotkeyNone");
+        }
+
+        HistoryHotkeyClearButton.IsEnabled = gesture is not null;
+    }
+
+    /// <summary>A new shortcut for the history, or none (null). The one of the search bar is refused; the old one stays then.</summary>
+    private void ChangeHistoryHotkey(HotkeyGesture? gesture)
+    {
+        var current = _services.Settings.Current;
+        if (gesture is { } wanted)
+        {
+            string text = wanted.Format(CultureInfo.CurrentUICulture);
+            if (HotkeyRules.Conflicts(wanted, current.HotkeyValue))
+            {
+                ShowHistoryHotkey(current.HistoryHotkeyValue);
+                ShowHistoryHotkeyMessage(LocationUi.Format("Hist_HotkeyConflict", text), true);
+                return;
+            }
+
+            if (_services.TryApplyHistoryHotkey(wanted) is { } error)
+            {
+                ShowHistoryHotkey(current.HistoryHotkeyValue);
+                ShowHistoryHotkeyMessage(LocationUi.Format("Hotkey_Refused", text, error), true);
+                return;
+            }
+
+            SaveSettings(s => s with { HistoryHotkey = wanted.Format() });
+            ShowHistoryHotkey(wanted);
+            ShowHistoryHotkeyMessage(LocationUi.Format("Hist_HotkeyChanged", text), false);
+            return;
+        }
+
+        _services.TryApplyHistoryHotkey(null);
+        SaveSettings(s => s with { HistoryHotkey = string.Empty });
+        ShowHistoryHotkey(null);
+        ShowHistoryHotkeyMessage(Strings.Get("Hist_HotkeyRemoved"), false);
+    }
+
+    private void ShowHistoryHotkeyMessage(string text, bool warning)
+    {
+        HistoryHotkeyMessage.Text = text;
+        HistoryHotkeyMessage.Foreground = warning ? (Brush)FindResource("WarnBrush") : (Brush)FindResource("MutedBrush");
     }
 
     // ---------------------------------------------------------------- image text (stage 11, PLAN.md 11.3)

@@ -299,4 +299,34 @@ They are replaced by {0}. Continue?</value></data>
   <data name="Ocr_MsgFolderAdded" xml:space="preserve"><value>{0} added. Its images are read in the background.</value></data>
   <data name="Ocr_MsgFolderAddedOff" xml:space="preserve"><value>{0} added. Its images are read once the text recognition is switched on.</value></data>
   <data name="Ocr_MsgFolderRemoved" xml:space="preserve"><value>{0} removed. The recognized text of its images was deleted.</value></data>
+  <data name="Menu_History" xml:space="preserve"><value>Screenshot history…</value></data>
+  <data name="Hist_Title" xml:space="preserve"><value>FileDetective – Screenshot history</value></data>
+  <data name="Hist_SearchPlaceholder" xml:space="preserve"><value>Search the text in your screenshots</value></data>
+  <data name="Hist_AllFolders" xml:space="preserve"><value>All folders</value></data>
+  <data name="Hist_Today" xml:space="preserve"><value>Today</value></data>
+  <data name="Hist_Yesterday" xml:space="preserve"><value>Yesterday</value></data>
+  <data name="Hist_DayHeader" xml:space="preserve"><value>{0} · {1:N0} images</value></data>
+  <data name="Hist_OffHint" xml:space="preserve"><value>Text recognition is off. The images of your folders are listed from the directory, but without their text you cannot search them.</value></data>
+  <data name="Hist_NoFolders" xml:space="preserve"><value>No folder is chosen for the image text. Add folders in Settings &gt; Image text.</value></data>
+  <data name="Hist_Empty" xml:space="preserve"><value>No images in the folders yet.</value></data>
+  <data name="Hist_NoMatch" xml:space="preserve"><value>No image has this text.</value></data>
+  <data name="Hist_Loading" xml:space="preserve"><value>Loading directory…</value></data>
+  <data name="Hist_Count" xml:space="preserve"><value>{0:N0} images</value></data>
+  <data name="Hist_CountOf" xml:space="preserve"><value>{0:N0} of {1:N0} images</value></data>
+  <data name="Hist_Keys" xml:space="preserve"><value>Enter open · Ctrl+Enter folder · Ctrl+C image · Ctrl+Shift+C text · drag into a mail</value></data>
+  <data name="Hist_TextHeading" xml:space="preserve"><value>Recognized text</value></data>
+  <data name="Hist_SelectImage" xml:space="preserve"><value>Select an image to see its text.</value></data>
+  <data name="Hist_NotReadYet" xml:space="preserve"><value>The text of this image is not read yet.</value></data>
+  <data name="Hist_TextOff" xml:space="preserve"><value>Text recognition is off, so there is no text.</value></data>
+  <data name="Hist_CloudOnly" xml:space="preserve"><value>Only in the cloud</value></data>
+  <data name="Hist_CloudNote" xml:space="preserve"><value>This image is only in the cloud. It is not opened, so there is no preview and no text.</value></data>
+  <data name="Hist_CloudNoCopy" xml:space="preserve"><value>An image that is only in the cloud is not opened, so it cannot be copied as an image.</value></data>
+  <data name="Hist_HotkeyLabel" xml:space="preserve"><value>Shortcut to open the screenshot history</value></data>
+  <data name="Hist_HotkeyNone" xml:space="preserve"><value>No shortcut set</value></data>
+  <data name="Hist_HotkeyHint" xml:space="preserve"><value>Without a shortcut the history opens from the menu of the tray icon.</value></data>
+  <data name="Hist_HotkeyConflict" xml:space="preserve"><value>{0} is the shortcut of the search bar. Choose another one.</value></data>
+  <data name="Hist_HotkeyConflictSearch" xml:space="preserve"><value>{0} is the shortcut of the screenshot history. Choose another one.</value></data>
+  <data name="Hist_HotkeyChanged" xml:space="preserve"><value>The shortcut of the screenshot history is now {0}.</value></data>
+  <data name="Hist_HotkeyRemoved" xml:space="preserve"><value>The shortcut of the screenshot history was removed.</value></data>
+  <data name="Hist_HotkeyFailedTitle" xml:space="preserve"><value>Shortcut of the screenshot history not available</value></data>
 </root>

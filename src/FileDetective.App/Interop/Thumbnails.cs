@@ -19,22 +19,31 @@ internal sealed class Thumbnails : IDisposable
     /// <summary>Side of a preview in device-independent units.</summary>
     public const int Size = 64;
 
-    private const int CacheSize = 300;
+    private const int DefaultCacheSize = 300;
 
     private readonly Dispatcher _dispatcher;
     private readonly Func<string, bool> _isLocal;
     private readonly object _gate = new();
-    private readonly LinkedList<(string Key, string Path, Action<BitmapSource> Done)> _requests = new();
+    private readonly LinkedList<(string Key, string Path, Action<BitmapSource> Done, Func<bool>? Wanted)> _requests = new();
+    private readonly int _cacheSize;
+    private readonly bool _newestFirst;
     private readonly Dictionary<string, BitmapSource> _cache = [];
     private readonly Queue<string> _cacheOrder = new();
     private readonly AutoResetEvent _signal = new(false);
     private readonly Thread _thread;
     private volatile bool _stopped;
 
-    public Thumbnails(Dispatcher dispatcher, Func<string, bool> isLocal)
+    /// <param name="cacheSize">How many previews are kept.</param>
+    /// <param name="newestFirst">
+    /// Take the request made last first (the history grid: what scrolled into view last is what the user looks at). Default:
+    /// in the order of the requests (the search bar: the top row first).
+    /// </param>
+    public Thumbnails(Dispatcher dispatcher, Func<string, bool> isLocal, int cacheSize = DefaultCacheSize, bool newestFirst = false)
     {
         _dispatcher = dispatcher;
         _isLocal = isLocal;
+        _cacheSize = cacheSize;
+        _newestFirst = newestFirst;
         _thread = new Thread(Run) { IsBackground = true, Name = "FileDetective thumbnails", Priority = ThreadPriority.BelowNormal };
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
@@ -44,7 +53,8 @@ internal sealed class Thumbnails : IDisposable
     /// Asks for the preview of <paramref name="path"/> in <paramref name="pixels"/> device pixels; <paramref name="done"/> runs on
     /// the UI thread. A preview in the cache is handed over at once. Requests not started yet are dropped by <see cref="CancelPending"/>.
     /// </summary>
-    public void Request(string path, DateTime lastWriteUtc, int pixels, Action<BitmapSource> done)
+    /// <param name="wanted">Asked on the loading thread just before the work starts; false drops the request (the row scrolled away).</param>
+    public void Request(string path, DateTime lastWriteUtc, int pixels, Action<BitmapSource> done, Func<bool>? wanted = null)
     {
         string key = $"{pixels}|{lastWriteUtc.Ticks}|{path}";
         BitmapSource? cached;
@@ -52,7 +62,7 @@ internal sealed class Thumbnails : IDisposable
         {
             if (!_cache.TryGetValue(key, out cached))
             {
-                _requests.AddLast((key, path, done));
+                _requests.AddLast((key, path, done, wanted));
             }
         }
 
@@ -81,16 +91,22 @@ internal sealed class Thumbnails : IDisposable
             _signal.WaitOne();
             while (!_stopped)
             {
-                (string Key, string Path, Action<BitmapSource> Done) request;
+                (string Key, string Path, Action<BitmapSource> Done, Func<bool>? Wanted) request;
                 lock (_gate)
                 {
-                    if (_requests.First is not { } first)
+                    var node = _newestFirst ? _requests.Last : _requests.First;
+                    if (node is null)
                     {
                         break;
                     }
 
-                    request = first.Value;
-                    _requests.RemoveFirst();
+                    request = node.Value;
+                    _requests.Remove(node);
+                }
+
+                if (request.Wanted is { } wanted && !wanted())
+                {
+                    continue;
                 }
 
                 int pixels = int.Parse(request.Key.AsSpan(0, request.Key.IndexOf('|')), System.Globalization.CultureInfo.InvariantCulture);
@@ -114,7 +130,7 @@ internal sealed class Thumbnails : IDisposable
                     if (_cache.TryAdd(request.Key, image))
                     {
                         _cacheOrder.Enqueue(request.Key);
-                        while (_cacheOrder.Count > CacheSize)
+                        while (_cacheOrder.Count > _cacheSize)
                         {
                             _cache.Remove(_cacheOrder.Dequeue());
                         }
@@ -159,6 +175,19 @@ internal sealed class Thumbnails : IDisposable
             try
             {
                 var source = Imaging.CreateBitmapSourceFromHBitmap(bitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+
+                // BiggerSizeOk lets Windows hand over a cached preview of 1,000 px and more; keep only what is needed,
+                // or hundreds of cached previews would hold hundreds of MB.
+                int longSide = Math.Max(source.PixelWidth, source.PixelHeight);
+                if (longSide > pixels)
+                {
+                    double scale = (double)pixels / longSide;
+                    var small = new System.Windows.Media.Imaging.WriteableBitmap(
+                        new System.Windows.Media.Imaging.TransformedBitmap(source, new System.Windows.Media.ScaleTransform(scale, scale)));
+                    small.Freeze();
+                    return small;
+                }
+
                 source.Freeze();
                 return source;
             }

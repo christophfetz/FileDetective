@@ -543,7 +543,7 @@ public sealed class ImageTextSearch(
         return new SearchResult(hits, ids.Count - dropped);
     }
 
-    private static bool FitsTypeFilters(string name, SearchQuery query)
+    internal static bool FitsTypeFilters(string name, SearchQuery query)
     {
         if (query.TypeFilterBytes.Length == 0)
         {

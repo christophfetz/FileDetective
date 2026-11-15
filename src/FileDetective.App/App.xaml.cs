@@ -21,6 +21,8 @@ public partial class App : System.Windows.Application
     private SettingsWindow? _settingsWindow;
     private StorageWindow? _storageWindow;
     private DuplicatesWindow? _duplicatesWindow;
+    private HistoryWindow? _historyWindow;
+    private HotkeyManager? _historyHotkey;
     private UpdateController? _updates;
     private Forms.ToolStripMenuItem? _updateItem;
     private Mutex? _runningMarker;
@@ -114,15 +116,18 @@ public partial class App : System.Windows.Application
             InstallUpdate = InstallUpdateAsync,
             ExePath = exePath,
             TryApplyHotkey = TryApplyHotkey,
+            TryApplyHistoryHotkey = TryApplyHistoryHotkey,
             SuspendHotkey = suspend =>
             {
                 if (suspend)
                 {
                     _hotkey?.Suspend();
+                    _historyHotkey?.Suspend();
                 }
                 else
                 {
                     _hotkey?.Resume();
+                    _historyHotkey?.Resume();
                 }
             },
         };
@@ -154,6 +159,28 @@ public partial class App : System.Windows.Application
 
         var gesture = _settings.Current.HotkeyValue;
         string? hotkeyError = TryApplyHotkey(gesture);
+
+        // Stage 12: the shortcut of the screenshot history, none by default. A failure is only reported; the settings
+        // window opens for the search bar shortcut alone.
+        try
+        {
+            _historyHotkey = new HotkeyManager();
+            _historyHotkey.Pressed += ToggleHistory;
+        }
+        catch (Exception ex)
+        {
+            FileLog.Shared.Error("Creating the history hotkey window failed", ex);
+        }
+
+        if (_settings.Current.HistoryHotkeyValue is { } historyGesture && TryApplyHistoryHotkey(historyGesture) is { } historyError)
+        {
+            ShowBalloon(
+                Strings.Get("Hist_HotkeyFailedTitle"),
+                string.Format(
+                    CultureInfo.CurrentCulture, Strings.Get("Hotkey_FailedText"),
+                    historyGesture.Format(CultureInfo.CurrentUICulture), historyError),
+                Forms.ToolTipIcon.Warning);
+        }
 
         _index.Start();
         _updates.Start();
@@ -363,12 +390,48 @@ public partial class App : System.Windows.Application
             return Strings.Get("Hotkey_NoWindow");
         }
 
+        if (HotkeyRules.Conflicts(gesture, _settings?.Current.HistoryHotkeyValue))
+        {
+            return LocationUi.Format("Hist_HotkeyConflictSearch", gesture.Format(CultureInfo.CurrentUICulture));
+        }
+
         if (_hotkey.TryRegister(gesture, out string error))
         {
             return null;
         }
 
         FileLog.Shared.Error($"Registering {gesture.Format()} failed: {error}");
+        return error;
+    }
+
+    /// <summary>
+    /// Registers the shortcut of the screenshot history, or lets it go (<paramref name="gesture"/> null). Returns null on
+    /// success or the reason; the previous shortcut stays on failure. A shortcut equal to the one of the search bar is refused.
+    /// </summary>
+    private string? TryApplyHistoryHotkey(HotkeyGesture? gesture)
+    {
+        if (_historyHotkey is null)
+        {
+            return Strings.Get("Hotkey_NoWindow");
+        }
+
+        if (gesture is not { } wanted)
+        {
+            _historyHotkey.Clear();
+            return null;
+        }
+
+        if (HotkeyRules.Conflicts(wanted, _settings?.Current.HotkeyValue))
+        {
+            return LocationUi.Format("Hist_HotkeyConflict", wanted.Format(CultureInfo.CurrentUICulture));
+        }
+
+        if (_historyHotkey.TryRegister(wanted, out string error))
+        {
+            return null;
+        }
+
+        FileLog.Shared.Error($"Registering {wanted.Format()} for the history failed: {error}");
         return error;
     }
 
@@ -482,6 +545,38 @@ public partial class App : System.Windows.Application
         window.ShowInFront();
     }
 
+    /// <summary>Opens the screenshot history (PLAN.md 11.3), or brings the open one to the front.</summary>
+    private void OpenHistory()
+    {
+        if (_services is null || _settings is { Current.FirstRunCompleted: false })
+        {
+            return;
+        }
+
+        if (_historyWindow is not null)
+        {
+            _historyWindow.ShowInFront();
+            return;
+        }
+
+        var window = new HistoryWindow(_services);
+        _historyWindow = window;
+        window.Closed += (_, _) => _historyWindow = null;
+        window.ShowInFront();
+    }
+
+    /// <summary>The shortcut of the history: opens the window; pressed again while it is in front, closes it.</summary>
+    private void ToggleHistory()
+    {
+        if (_historyWindow is { IsActive: true })
+        {
+            _historyWindow.Close();
+            return;
+        }
+
+        OpenHistory();
+    }
+
     private void CreateTrayIcon()
     {
         var menu = new Forms.ContextMenuStrip();
@@ -494,6 +589,8 @@ public partial class App : System.Windows.Application
         storageItem.Click += (_, _) => OpenStorage();
         var duplicatesItem = new Forms.ToolStripMenuItem(Strings.Get("Menu_Duplicates"));
         duplicatesItem.Click += (_, _) => OpenDuplicates();
+        var historyItem = new Forms.ToolStripMenuItem(Strings.Get("Menu_History"));
+        historyItem.Click += (_, _) => OpenHistory();
         var settingsItem = new Forms.ToolStripMenuItem(Strings.Get("Menu_Settings"));
         settingsItem.Click += (_, _) => OpenSettings(SettingsSection.Locations);
         _statusItem = new Forms.ToolStripMenuItem(Strings.Get("Tray_StatusLoading")) { Enabled = false };
@@ -507,6 +604,7 @@ public partial class App : System.Windows.Application
         menu.Items.Add(update);
         menu.Items.Add(storageItem);
         menu.Items.Add(duplicatesItem);
+        menu.Items.Add(historyItem);
         menu.Items.Add(settingsItem);
         menu.Items.Add(_updateItem);
         menu.Items.Add(_statusItem);
@@ -692,6 +790,8 @@ public partial class App : System.Windows.Application
         _runningMarker = null;
         _hotkey?.Dispose();
         _hotkey = null;
+        _historyHotkey?.Dispose();
+        _historyHotkey = null;
 
         if (_trayIcon is not null)
         {
@@ -704,6 +804,7 @@ public partial class App : System.Windows.Application
         _settingsWindow?.Close();
         _storageWindow?.Close();
         _duplicatesWindow?.Close();
+        _historyWindow?.Close();
         _bar?.Close();
         _thumbnails?.Dispose();
         _thumbnails = null;

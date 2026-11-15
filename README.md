@@ -66,6 +66,24 @@ gently network shares are treated, and you can rebuild the whole index.
 By default FileDetective skips system folders and developer clutter: `node_modules`, `.git`, `Windows`, `Program Files`,
 `ProgramData`, `AppData`, the recycle bin and similar, plus temporary files. The lists are editable.
 
+## Text in screenshots and the screenshot history
+
+FileDetective can read the text in your screenshots and find the images by it. **This is off by default**; switch it on in
+*Settings > Image text* (or with the one-time hint in the search bar). It uses the text recognition built into Windows, so it
+works **offline** and nothing leaves your computer. It reads the images (`.png .jpg .jpeg .bmp .gif .tif .tiff`, 5 KB to
+50 MB) of **local folders only**, by default the Windows Screenshots folder; you can add or remove folders. Network shares,
+network drives and files that exist only in the cloud are never opened. Press Tab in the search bar until *Image text*;
+Ctrl+C copies the image, Ctrl+Shift+C the recognized text. Switching it off deletes all recognized text. If Windows has no
+recognition language for you, the settings say how to add it without administrator rights.
+
+The **screenshot history** (tray menu *Screenshot history…*, optionally a shortcut you choose in *Settings > Image text*;
+none is set by default) shows the images of those folders as a grid of previews, newest first and grouped by day. It has the
+same text search as the search bar (all words, `müller` finds `Mueller`) and a filter by folder. For the chosen image you can
+copy the image or its text, open it, show it in Explorer, drag it into a mail or a ticket as a file, and read the recognized
+text in a side panel with your search words marked. New screenshots appear by themselves. Nothing is deleted there. The list
+comes from FileDetective's own index (no folder is listed again for it); previews are made for local images only, never for
+cloud-only files. With the text recognition off the window still lists the images, but there is no text to search.
+
 ## What happens on network shares, and what does not
 
 This is the part to show your IT department.

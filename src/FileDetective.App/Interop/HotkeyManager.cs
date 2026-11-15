@@ -62,6 +62,13 @@ internal sealed class HotkeyManager : IDisposable
         return false;
     }
 
+    /// <summary>Lets go of the combination for good (the shortcut was removed in the settings).</summary>
+    public void Clear()
+    {
+        Unregister();
+        _current = null;
+    }
+
     /// <summary>
     /// Lets go of the combination for a moment (the settings window records a new one and the old combination must not
     /// open the search bar meanwhile). <see cref="Resume"/> takes it back.

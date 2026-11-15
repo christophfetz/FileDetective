@@ -32,6 +32,8 @@ internal sealed class IndexService : IDisposable
     private RefreshScheduler? _scheduler;
     private LocalWatcher? _watcher;
     private ImageTextService? _imageText;
+    private ImageHistory? _history;
+    private DriveDiscovery? _drives;
     private readonly SemaphoreSlim _imageTextGate = new(1, 1);
     private (bool Enabled, string Folders)? _imageTextApplied;
     private Task? _loadWork;
@@ -73,6 +75,27 @@ internal sealed class IndexService : IDisposable
 
     /// <summary>Raised on a background thread when the progress of the image text changed.</summary>
     public event Action? ImageTextChanged;
+
+    /// <summary>The screenshot history (stage 12); null until the directory is loaded.</summary>
+    public ImageHistory? History => _history;
+
+    /// <summary>
+    /// Raised on a background thread when a change of the directory can alter the list of the history (an image came,
+    /// went or moved). Only the history window listens, and only while it is open.
+    /// </summary>
+    public event Action? HistoryChanged;
+
+    /// <summary>
+    /// The local folders of the history: those of the image text settings (while the list was never set, the Screenshots
+    /// folder), also when the image text is off, because the images are in the directory anyway. UNC paths and drives that
+    /// are not local are left out.
+    /// </summary>
+    public IReadOnlyList<string> HistoryFolders()
+    {
+        var drives = _drives;
+        return [.. ImageTextFolders.Effective(_settings(), KnownFolders.Screenshots)
+            .Where(path => drives is not null && drives.Describe(path) is { Kind: RootKind.Local })];
+    }
 
     public bool IsLoaded => _loaded;
 
@@ -133,6 +156,7 @@ internal sealed class IndexService : IDisposable
             var resolver = new DatabaseEntryResolver(database);
             var texts = new ImageTextIndex();
             var drives = new DriveDiscovery();
+            _drives = drives;
             var imageText = new ImageTextService(
                 store, index, texts, new WindowsImageTextRecognizer(), SystemLocalFileAccess.Instance, resolver,
                 new ImageTextServiceOptions
@@ -153,6 +177,21 @@ internal sealed class IndexService : IDisposable
                 });
             imageText.ProgressChanged += RaiseImageTextChanged;
             _imageText = imageText;
+            _history = new ImageHistory(new StoreImageHistorySource(store, resolver), texts, HistoryFolders);
+            store.Changed += change =>
+            {
+                if (HistoryChanged is { } listener && ImageHistory.IsRelevant(change))
+                {
+                    try
+                    {
+                        listener();
+                    }
+                    catch (Exception ex)
+                    {
+                        FileLog.Shared.Error("A history listener failed", ex);
+                    }
+                }
+            };
             var engine = new SearchEngine(
                 index, resolver, usage,
                 new ImageTextSearch(texts, resolver, store.GetImageTexts, () => imageText.Folders));

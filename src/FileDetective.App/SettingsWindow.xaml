@@ -240,6 +240,14 @@
             <Button x:Name="OcrRemoveButton" HorizontalAlignment="Left" Margin="0,10,0,0" />
             <TextBlock x:Name="OcrMessage" Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed" />
             <TextBlock x:Name="OcrFoldersHint" Style="{StaticResource MutedText}" Margin="0,10,0,0" />
+
+            <TextBlock x:Name="HistoryHotkeyLabel" Style="{StaticResource LabelText}" Margin="0,22,0,4" />
+            <StackPanel Orientation="Horizontal">
+              <local:HotkeyCaptureBox x:Name="HistoryHotkeyBox" Width="220" />
+              <Button x:Name="HistoryHotkeyClearButton" Margin="8,0,0,0" />
+            </StackPanel>
+            <TextBlock x:Name="HistoryHotkeyMessage" Margin="0,6,0,0" FontSize="12" />
+            <TextBlock x:Name="HistoryHotkeyHint" Style="{StaticResource MutedText}" Margin="0,6,0,0" />
           </StackPanel>
         </ScrollViewer>
 

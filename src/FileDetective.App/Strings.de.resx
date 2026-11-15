@@ -299,4 +299,34 @@ Sie werden durch {0} ersetzt. Fortfahren?</value></data>
   <data name="Ocr_MsgFolderAdded" xml:space="preserve"><value>{0} hinzugefügt. Seine Bilder werden im Hintergrund gelesen.</value></data>
   <data name="Ocr_MsgFolderAddedOff" xml:space="preserve"><value>{0} hinzugefügt. Seine Bilder werden gelesen, sobald die Texterkennung eingeschaltet ist.</value></data>
   <data name="Ocr_MsgFolderRemoved" xml:space="preserve"><value>{0} entfernt. Der erkannte Text seiner Bilder wurde gelöscht.</value></data>
+  <data name="Menu_History" xml:space="preserve"><value>Screenshot-Verlauf …</value></data>
+  <data name="Hist_Title" xml:space="preserve"><value>FileDetective – Screenshot-Verlauf</value></data>
+  <data name="Hist_SearchPlaceholder" xml:space="preserve"><value>Text in Ihren Screenshots suchen</value></data>
+  <data name="Hist_AllFolders" xml:space="preserve"><value>Alle Ordner</value></data>
+  <data name="Hist_Today" xml:space="preserve"><value>Heute</value></data>
+  <data name="Hist_Yesterday" xml:space="preserve"><value>Gestern</value></data>
+  <data name="Hist_DayHeader" xml:space="preserve"><value>{0} · {1:N0} Bilder</value></data>
+  <data name="Hist_OffHint" xml:space="preserve"><value>Die Texterkennung ist aus. Die Bilder Ihrer Ordner werden aus dem Verzeichnis aufgelistet, aber ohne ihren Text lassen sie sich nicht durchsuchen.</value></data>
+  <data name="Hist_NoFolders" xml:space="preserve"><value>Für den Bildtext ist kein Ordner gewählt. Ordner lassen sich unter Einstellungen &gt; Bildtext hinzufügen.</value></data>
+  <data name="Hist_Empty" xml:space="preserve"><value>In den Ordnern liegen noch keine Bilder.</value></data>
+  <data name="Hist_NoMatch" xml:space="preserve"><value>Kein Bild enthält diesen Text.</value></data>
+  <data name="Hist_Loading" xml:space="preserve"><value>Verzeichnis wird geladen …</value></data>
+  <data name="Hist_Count" xml:space="preserve"><value>{0:N0} Bilder</value></data>
+  <data name="Hist_CountOf" xml:space="preserve"><value>{0:N0} von {1:N0} Bildern</value></data>
+  <data name="Hist_Keys" xml:space="preserve"><value>Enter öffnen · Strg+Enter Ordner · Strg+C Bild · Strg+Umschalt+C Text · in eine Mail ziehen</value></data>
+  <data name="Hist_TextHeading" xml:space="preserve"><value>Erkannter Text</value></data>
+  <data name="Hist_SelectImage" xml:space="preserve"><value>Bild wählen, um seinen Text zu sehen.</value></data>
+  <data name="Hist_NotReadYet" xml:space="preserve"><value>Der Text dieses Bildes ist noch nicht gelesen.</value></data>
+  <data name="Hist_TextOff" xml:space="preserve"><value>Die Texterkennung ist aus, es gibt also keinen Text.</value></data>
+  <data name="Hist_CloudOnly" xml:space="preserve"><value>Nur in der Cloud</value></data>
+  <data name="Hist_CloudNote" xml:space="preserve"><value>Dieses Bild liegt nur in der Cloud. Es wird nicht geöffnet, daher gibt es keine Vorschau und keinen Text.</value></data>
+  <data name="Hist_CloudNoCopy" xml:space="preserve"><value>Ein Bild, das nur in der Cloud liegt, wird nicht geöffnet und lässt sich daher nicht als Bild kopieren.</value></data>
+  <data name="Hist_HotkeyLabel" xml:space="preserve"><value>Tastenkürzel für den Screenshot-Verlauf</value></data>
+  <data name="Hist_HotkeyNone" xml:space="preserve"><value>Kein Kürzel gesetzt</value></data>
+  <data name="Hist_HotkeyHint" xml:space="preserve"><value>Ohne Kürzel öffnet sich der Verlauf über das Menü des Infobereich-Symbols.</value></data>
+  <data name="Hist_HotkeyConflict" xml:space="preserve"><value>{0} ist das Kürzel der Suchleiste. Bitte ein anderes wählen.</value></data>
+  <data name="Hist_HotkeyConflictSearch" xml:space="preserve"><value>{0} ist das Kürzel des Screenshot-Verlaufs. Bitte ein anderes wählen.</value></data>
+  <data name="Hist_HotkeyChanged" xml:space="preserve"><value>Das Kürzel des Screenshot-Verlaufs ist jetzt {0}.</value></data>
+  <data name="Hist_HotkeyRemoved" xml:space="preserve"><value>Das Kürzel des Screenshot-Verlaufs wurde entfernt.</value></data>
+  <data name="Hist_HotkeyFailedTitle" xml:space="preserve"><value>Kürzel des Screenshot-Verlaufs nicht verfügbar</value></data>
 </root>

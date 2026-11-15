@@ -26,6 +26,12 @@ internal sealed class AppServices
     /// <summary>Registers a new hotkey; returns null on success or the reason why it failed (the old one then stays).</summary>
     public required Func<HotkeyGesture, string?> TryApplyHotkey { get; init; }
 
+    /// <summary>
+    /// Registers the shortcut of the screenshot history, or removes it (null); returns null on success or the reason why it
+    /// failed (the old one then stays). A shortcut equal to the one of the search bar is refused.
+    /// </summary>
+    public required Func<HotkeyGesture?, string?> TryApplyHistoryHotkey { get; init; }
+
     /// <summary>Gives the hotkey up (true) or takes it back (false) while the settings window records a new one.</summary>
     public required Action<bool> SuspendHotkey { get; init; }
 }

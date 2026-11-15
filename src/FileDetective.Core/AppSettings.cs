@@ -107,6 +107,13 @@ public sealed record AppSettings
     [JsonPropertyName("ocrHintDismissed")]
     public bool OcrHintDismissed { get; init; }
 
+    /// <summary>
+    /// Stage 12 (PLAN.md 11.3): global shortcut that opens the screenshot history, as text like <see cref="Hotkey"/>. Empty
+    /// (the default) means none. It must differ from <see cref="Hotkey"/> (<see cref="Sanitized"/> clears it otherwise).
+    /// </summary>
+    [JsonPropertyName("historyHotkey")]
+    public string HistoryHotkey { get; init; } = string.Empty;
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; init; }
 
@@ -114,6 +121,11 @@ public sealed record AppSettings
     [JsonIgnore]
     public HotkeyGesture HotkeyValue
         => HotkeyGesture.TryParse(Hotkey, out var gesture) ? gesture : HotkeyGesture.Default;
+
+    /// <summary>The shortcut of the screenshot history, or null if none is set, it is not valid or it equals the one of the search bar.</summary>
+    [JsonIgnore]
+    public HotkeyGesture? HistoryHotkeyValue
+        => HotkeyGesture.TryParse(HistoryHotkey, out var gesture) && !HotkeyRules.Conflicts(gesture, HotkeyValue) ? gesture : null;
 
     [JsonIgnore]
     public AppLanguage LanguageChoice => Language switch
@@ -165,6 +177,7 @@ public sealed record AppSettings
     public AppSettings Sanitized() => this with
     {
         Hotkey = HotkeyGesture.TryParse(Hotkey, out var gesture) ? gesture.Format() : HotkeyGesture.Default.Format(),
+        HistoryHotkey = SanitizeHistoryHotkey(Hotkey, HistoryHotkey),
         Language = Language is LanguageGerman or LanguageEnglish ? Language : LanguageSystem,
         Politeness = Politeness == PolitenessVeryGentle ? PolitenessVeryGentle : PolitenessNormal,
         ExcludedFolderNames = Clean(ExcludedFolderNames, ExcludeRules.DefaultFolderNames),
@@ -173,6 +186,17 @@ public sealed record AppSettings
         DuplicateMinSize = SanitizeMinSize(DuplicateMinSize),
         OcrFolders = OcrFolders is null ? null : ImageTextFolders.Clean(OcrFolders),
     };
+
+    private static string SanitizeHistoryHotkey(string searchHotkey, string historyHotkey)
+    {
+        if (!HotkeyGesture.TryParse(historyHotkey, out var gesture))
+        {
+            return string.Empty;
+        }
+
+        var search = HotkeyGesture.TryParse(searchHotkey, out var parsed) ? parsed : HotkeyGesture.Default;
+        return HotkeyRules.Conflicts(gesture, search) ? string.Empty : gesture.Format();
+    }
 
     /// <summary>Zero or less (also a missing value) becomes the default; other values are clamped to 1 KB … 1 TB.</summary>
     public static long SanitizeMinSize(long value)
