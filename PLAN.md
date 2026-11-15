@@ -597,9 +597,15 @@ Abnahme durch Tests: gleiche Größe mit verschiedenem Inhalt ist keine Dublette
 
 ### 11.3 Version 3 – Bildtext und Verlauf
 
-Mit dem Nutzer festgelegt am 2026-11-15. Version 3 beginnt erst nach dem Test des Nutzers und dem Firmentest des Stands nach Etappe 10. Anlass: Im Service entstehen viele Screenshots, die man später über den Text darin wiederfinden will. Die Funktion hängt von keinem anderen Programm ab. Wer ScreenKeeper (boehla) nutzt, bekommt dessen Angaben als Zusatz mit (siehe unten).
+Mit dem Nutzer festgelegt am 2026-11-15. Version 3 beginnt erst nach dem Test des Nutzers und dem Firmentest des Stands nach Etappe 10. Anlass: Im Service entstehen viele Screenshots, die man später über den Text darin wiederfinden will. Die Funktion hängt von keinem anderen Programm ab und liest keine Dateien anderer Screenshot-Programme mit.
 
 **Etappe 11 – Bildtext (hoch)**
+
+Schalter:
+- Einstellung `ocrEnabled`, Schalter „Text in Bildern erkennen“ in den Einstellungen. Ab Werk aus (Nutzerentscheidung 2026-11-15): Ein öffentliches Programm, das auch in Firmen läuft, soll nach einem Update nicht ungefragt alle Screenshots lesen.
+- Solange der Schalter aus ist, liest das Programm kein Bild und es läuft keine Warteschlange. Der Modus „Bildtext“ fehlt im Tab-Zyklus.
+- Im Modus „Alles“ zeigt die Suchleiste einmalig einen kleinen Hinweis „Text in Screenshots durchsuchen? Einschalten“. Nach dem Einschalten oder Wegklicken erscheint er nie wieder.
+- Ausschalten löscht den gespeicherten Bildtext sofort. Wer wieder einschaltet, startet die Erkennung im Hintergrund neu.
 
 Ordner:
 - Einstellung `ocrFolders`: Liste lokaler Ordner. Vorbelegt ist nur der Windows-Standardordner für Screenshots (Known Folder `Screenshots`), wohin er auch umgeleitet ist, auch nach OneDrive. Weitere Ordner lassen sich in den Einstellungen hinzufügen und entfernen.
@@ -633,10 +639,6 @@ Suche:
 - Enter öffnet das Bild, Strg+Enter zeigt es im Explorer, Strg+C kopiert das Bild, Strg+Umschalt+C den erkannten Text.
 - Bei leerer Eingabe zeigt der Modus die neuesten Bilder.
 
-ScreenKeeper als Zusatz:
-- Liegt neben einem Bild eine ScreenKeeper-Datei `<name>.json` mit `formatVersion` 1, werden `comment`, die Fenstertitel aus `windows[].title` und ein vorhandenes `ocrText` mit durchsucht.
-- Diese Dateien werden nur gelesen, nie geschrieben.
-
 Abnahme durch Tests:
 - Cloud-Dateien werden nie geöffnet; eine Attrappe zählt die Zugriffe.
 - Netzwerkordner werden abgelehnt.
@@ -646,6 +648,8 @@ Abnahme durch Tests:
 - Suchform und Textstelle sind korrekt.
 - Der Tab-Zyklus enthält „Bildtext“.
 - `*.thumb.jpg` und die Größengrenzen werden übersprungen.
+- Bei ausgeschaltetem Schalter wird kein Bild geöffnet, und „Bildtext“ fehlt im Tab-Zyklus.
+- Ausschalten löscht den gespeicherten Text.
 
 Gemessen und im Changelog festgehalten: Erkennungsdauer je Screenshot und Größe der `.exe`.
 
