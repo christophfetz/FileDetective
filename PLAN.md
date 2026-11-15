@@ -690,6 +690,36 @@ Gemessen und im Changelog festgehalten: Erkennungsdauer je Screenshot und Größ
 - Kürzel: Einstellung `historyHotkey` (leer = keins), im Bereich „Bildtext“ der Einstellungen mit „Entfernen“. Ein zweiter `HotkeyManager`; gleiches Kürzel wie die Suchleiste wird in beide Richtungen abgelehnt (Einstellungsfenster, `App`, `AppSettings.Sanitized`). Ein beim Start nicht registrierbares Kürzel wird nur gemeldet.
 - Öffnen und Im-Explorer-zeigen prüfen wie die Suchleiste mit `ExistenceCheck`; ein verschwundenes Bild wird aus dem Verzeichnis entfernt (das ist kein Löschen einer Datei).
 
+### 11.4 Etappe 13 – Öffnen mit und Bildnotizen (normal)
+
+Mit dem Nutzer festgelegt am 2026-11-15, nach dem ersten Test von Version 3: Fotos und schief gescannte Blätter haben keinen erkennbaren Text und sind deshalb über den Bildtext nicht zu finden. Version 0.3.0, keine neuen Pakete.
+
+Öffnen mit:
+- Neuer Eintrag „Öffnen mit …“ im Rechtsklick-Menü der Suchleiste (nur für Dateien, nicht für Ordner) und im Screenshot-Verlauf (Knopf und Kontextmenü).
+- Er ruft den Windows-Dialog „Wie möchten Sie diese Datei öffnen?“ auf (`SHOpenWithDialog`), denselben wie „Andere App auswählen“ im Explorer. Es gibt keine eigene Programmliste.
+- Vorher dieselbe Prüfung wie beim Öffnen (`ExistenceCheck`, nicht verbundene Orte gesperrt). Der Dialog selbst öffnet die Datei nicht; erst die gewählte App, wie beim normalen Öffnen. Gezählt wird ein Öffnen nur, wenn eine App gewählt wurde.
+
+Bildnotizen:
+- Im Seitenbereich des Verlaufs ein Feld „Notiz“ über dem erkannten Text. Gespeichert wird beim Verlassen des Feldes, beim Wechsel des Bildes und beim Schließen des Fensters; ein leeres Feld löscht die Notiz.
+- Die Notiz wird nie ins Bild und nie in den Dateinamen geschrieben (Regel 2), sondern in die Tabelle `notes(path, text, changed_utc)` in `index.db`, eingeführt wie `hashes` (`CREATE … IF NOT EXISTS`, Schemaversion bleibt). Schlüssel ist der volle Pfad (ohne Groß-/Kleinschreibung), nicht die Eintragsnummer: Neuaufbau und Neunummerierung lassen die Notizen unberührt, und das Ausschalten der Texterkennung löscht sie nicht.
+- Notizen gehen immer, auch bei ausgeschalteter Texterkennung. Das Suchfeld des Verlaufs ist deshalb auch dann aktiv und findet die Notizen.
+- Gesucht wird die Notiz wie der erkannte Text (Suchform 6.2): im Verlauf und im Modus „Bildtext“ der Suchleiste. Ein Begriff darf in der Notiz und ein anderer im Text stehen. Die Textstelle eines Treffers zeigt Notiz und Text.
+- Lebensdauer: Meldet das Verzeichnis ein Bild mit Notiz als entfernt, bleibt die Notiz, solange kein Ort den Pfad enthält (Ort entfernt) oder die Datei laut Auflistung des Elternordners noch da ist (nur lokal, die Datei wird nicht geöffnet). Sonst ist das Bild nachweislich weg und die Notiz wird gelöscht. Wird ein Bild umbenannt oder verschoben und meldet das Verzeichnis das als Umhängen, wandert die Notiz mit; sonst geht sie verloren.
+
+Abnahme durch Tests:
+- Eine bestehende Datenbank wird ohne Verlust um `notes` erweitert.
+- Notizen überstehen Neuaufbau und Ausschalten der Texterkennung.
+- Suche über Notiz, über Text und über beide zusammen; Notizen ohne erkannten Text erscheinen bei leerer Eingabe.
+- Ein gelöschtes Bild verliert seine Notiz, ein entfernter Ort nicht; ein umbenanntes Bild nimmt sie mit.
+- Ein leerer Text löscht die Notiz.
+
+**Umsetzung und Entscheidungen** (Etappe 13, 2026-11-15)
+
+- Aufbau: `ImageNotes.cs` (`ImageNoteService`) in `Core`, Notizen im `ImageTextIndex` getrennt vom erkannten Text (`Clear`, `Count`, `Contains` und `Ids` betreffen weiter nur den erkannten Text, `Find` sucht in beiden); in `App` `IndexService.Notes`, das Notizfeld im Verlauf und `ShellActions.OpenWith`.
+- Eine Notiz ist höchstens 2.000 Zeichen lang, Zeilenumbrüche bleiben. Gespeichert wird nur, wenn sich der Text gegenüber dem beim Anzeigen geladenen geändert hat; so schreibt ein umbenanntes Bild seine mitgewanderte Notiz nicht an den alten Pfad zurück.
+- In der Suchleiste schließt sich die Leiste vor dem Dialog „Öffnen mit“, damit die gewählte App vorn erscheint. Im Notizfeld schreibt Enter eine neue Zeile, Esc verlässt das Feld (und speichert), Strg+C kopiert markierten Text.
+- Notizen werden im Verlauf nicht hervorgehoben; die Textstelle der Suchleiste zeigt Notiz und Text zusammen mit markierten Begriffen.
+
 ## 12. Stand
 
 - [x] Etappe 0 – Projektgerüst
@@ -706,6 +736,7 @@ Gemessen und im Changelog festgehalten: Erkennungsdauer je Screenshot und Größ
 - [x] Etappe 10 – Dubletten
 - [x] Etappe 11 – Bildtext
 - [x] Etappe 12 – Verlauf
+- [x] Etappe 13 – Öffnen mit und Bildnotizen
 
 ## 13. Bewusst nicht enthalten
 

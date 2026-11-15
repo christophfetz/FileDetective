@@ -676,6 +676,7 @@ public sealed class ImageTextDatabaseTests : IDisposable
             Assert.Equal(1, Scalar(f.Db, "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'schema_version'"));
             Assert.Equal(1, Count(f.Db, "table", "ocr"));
             Assert.Equal(1, Count(f.Db, "trigger", "tr_entries_delete_ocr"));
+            Assert.Equal(1, Count(f.Db, "table", "notes")); // stage 13
             Assert.Equal(4, Scalar(f.Db, "SELECT COUNT(*) FROM entries"));
             Assert.Equal(1, Scalar(f.Db, "SELECT COUNT(*) FROM hashes"));
             Assert.Equal(1, Scalar(f.Db, "SELECT COUNT(*) FROM usage"));

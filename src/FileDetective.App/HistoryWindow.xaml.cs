@@ -71,6 +71,8 @@ public partial class HistoryWindow : Window
     private HistoryTileItem? _pressTile;
     private Point _pressPoint;
     private bool _menuOnTile;
+    private (int Id, string Path)? _noteTarget;
+    private string _noteLoaded = string.Empty;
 
     internal HistoryWindow(AppServices services)
     {
@@ -121,6 +123,11 @@ public partial class HistoryWindow : Window
         CopyImageButton.Click += (_, _) => CopyImage();
         CopyTextButton.Click += async (_, _) => await CopyTextAsync();
         OpenButton.Click += async (_, _) => await OpenSelectedAsync(reveal: false);
+        OpenWithButton.Click += async (_, _) => await OpenSelectedAsync(reveal: false, with: true);
+        MenuOpenWith.Click += async (_, _) => await OpenSelectedAsync(reveal: false, with: true);
+        NoteBox.TextChanged += (_, _) => UpdateNotePlaceholder();
+        NoteBox.LostKeyboardFocus += (_, _) => SaveNote();
+        Closing += (_, _) => SaveNote();
         RevealButton.Click += async (_, _) => await OpenSelectedAsync(reveal: true);
         MenuCopyImage.Click += (_, _) => CopyImage();
         MenuCopyText.Click += async (_, _) => await CopyTextAsync();
@@ -173,6 +180,10 @@ public partial class HistoryWindow : Window
         CopyImageButton.Content = Strings.Get("Ctx_CopyImage");
         CopyTextButton.Content = Strings.Get("Ctx_CopyText");
         OpenButton.Content = Strings.Get("Ctx_Open");
+        OpenWithButton.Content = Strings.Get("Ctx_OpenWith");
+        MenuOpenWith.Header = Strings.Get("Ctx_OpenWith");
+        NoteHeading.Text = Strings.Get("Hist_NoteHeading");
+        NotePlaceholder.Text = Strings.Get("Hist_NotePlaceholder");
         RevealButton.Content = Strings.Get("Ctx_Reveal");
         MenuCopyImage.Header = Strings.Get("Ctx_CopyImage");
         MenuCopyText.Header = Strings.Get("Ctx_CopyText");
@@ -544,8 +555,7 @@ public partial class HistoryWindow : Window
     private void UpdateBanner()
     {
         bool on = OcrOn;
-        SearchBox.IsEnabled = on;
-        if (!on)
+        if (!on) // the search stays on: it finds the notes (stage 13)
         {
             BannerText.Text = Strings.Get("Hist_OffHint");
             BannerButton.Visibility = Visibility.Visible;
@@ -650,6 +660,7 @@ public partial class HistoryWindow : Window
 
         if (_selectedId != id)
         {
+            SaveNote(); // before the panel shows another image
             if (_selectedId is { } old && _tiles.TryGetValue(old, out var oldTile))
             {
                 oldTile.IsSelected = false;
@@ -678,7 +689,9 @@ public partial class HistoryWindow : Window
         CopyImageButton.IsEnabled = image is { CanCopyImage: true };
         CopyTextButton.IsEnabled = image is { IsCloud: false };
         OpenButton.IsEnabled = any;
+        OpenWithButton.IsEnabled = any;
         RevealButton.IsEnabled = any;
+        MenuOpenWith.IsEnabled = any;
         MenuCopyImage.IsEnabled = CopyImageButton.IsEnabled;
         MenuCopyText.IsEnabled = CopyTextButton.IsEnabled;
         MenuOpen.IsEnabled = any;
@@ -771,7 +784,8 @@ public partial class HistoryWindow : Window
     {
         var focus = Keyboard.FocusedElement as DependencyObject;
         bool inSearch = ReferenceEquals(focus, SearchBox);
-        bool inText = focus is DependencyObject d && (ReferenceEquals(d, TextView) || IsInside(d, TextView));
+        bool inNote = ReferenceEquals(focus, NoteBox);
+        bool inText = inNote || (focus is DependencyObject d && (ReferenceEquals(d, TextView) || IsInside(d, TextView)));
         bool onControl = focus is Button or ComboBox or ComboBoxItem or MenuItem || inText;
         var modifiers = Keyboard.Modifiers;
         bool ctrl = (modifiers & ModifierKeys.Control) != 0;
@@ -789,6 +803,13 @@ public partial class HistoryWindow : Window
                 if (focus is ComboBox or ComboBoxItem or MenuItem)
                 {
                     return; // closes the drop-down or the menu
+                }
+
+                if (inNote)
+                {
+                    e.Handled = true;
+                    GridView.Focus(); // leaves the note, which saves it
+                    return;
                 }
 
                 e.Handled = true;
@@ -918,8 +939,11 @@ public partial class HistoryWindow : Window
             ? "Footer_TextCopied" : "Footer_CopyFailed"));
     }
 
-    /// <summary>Opens the image (or shows it in Explorer) after the same check as the search bar: a gone image leaves the directory.</summary>
-    private async Task OpenSelectedAsync(bool reveal)
+    /// <summary>
+    /// Opens the image (with <paramref name="with"/>: through the Windows dialog "Open with", stage 13), or shows it in
+    /// Explorer, after the same check as the search bar: a gone image leaves the directory.
+    /// </summary>
+    private async Task OpenSelectedAsync(bool reveal, bool with = false)
     {
         if (SelectedImage is not { } image || _services.Index.Store is not { } store)
         {
@@ -935,7 +959,20 @@ public partial class HistoryWindow : Window
             switch (result)
             {
                 case ExistenceResult.Exists:
-                    string? error = reveal ? ShellActions.RevealInExplorer(path) : ShellActions.Open(path);
+                    string? error;
+                    if (with)
+                    {
+                        var owner = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                        if (!ShellActions.OpenWith(owner, path, out error) && error is null)
+                        {
+                            break; // cancelled
+                        }
+                    }
+                    else
+                    {
+                        error = reveal ? ShellActions.RevealInExplorer(path) : ShellActions.Open(path);
+                    }
+
                     if (error is not null)
                     {
                         ShowMessage(LocationUi.Format("Footer_OpenFailed", error));
@@ -1003,6 +1040,7 @@ public partial class HistoryWindow : Window
         _panelCts = cts;
         try
         {
+            ShowNote(SelectedImage);
             if (SelectedImage is not { } image)
             {
                 PanelName.Text = string.Empty;
@@ -1069,6 +1107,75 @@ public partial class HistoryWindow : Window
         catch (Exception ex)
         {
             FileLog.Shared.Error("Showing the recognized text failed", ex);
+        }
+    }
+
+    // ---------------------------------------------------------------- note (stage 13, PLAN.md 11.4)
+
+    /// <summary>Puts the note of the image into the box; only when another image is shown, so typing is never overwritten.</summary>
+    private void ShowNote(HistoryImage? image)
+    {
+        if (_noteTarget is { } current && image is not null && current.Id == image.EntryId)
+        {
+            _noteTarget = (image.EntryId, image.FullPath); // renamed: the note moved along, typing goes on
+        }
+        else if (_noteTarget is not null)
+        {
+            SaveNote(); // the image left the list before its note was saved
+        }
+
+        if (image is null)
+        {
+            _noteTarget = null;
+            NoteBox.Text = string.Empty;
+            NoteBox.IsEnabled = false;
+            UpdateNotePlaceholder();
+            return;
+        }
+
+        if (_noteTarget is { } target && target.Id == image.EntryId
+            && string.Equals(target.Path, image.FullPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _noteTarget = (image.EntryId, image.FullPath);
+        NoteBox.IsEnabled = _services.Index.Notes is not null;
+        _noteLoaded = _services.Index.Notes?.GetByPath(image.FullPath) ?? string.Empty;
+        NoteBox.Text = _noteLoaded;
+        UpdateNotePlaceholder();
+    }
+
+    private void UpdateNotePlaceholder()
+        => NotePlaceholder.Visibility = NoteBox.Text.Length == 0 && NoteBox.IsEnabled ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>Stores the note of the image the box belongs to, if it changed; blank removes it.</summary>
+    private void SaveNote()
+    {
+        if (_noteTarget is not { } target || _services.Index.Notes is not { } notes)
+        {
+            return;
+        }
+
+        // Compared with what the box was filled with, not with the store: a note that moved with a renamed image must not
+        // be written back to the old path.
+        string text = NoteBox.Text;
+        string clean = ImageNoteService.Clean(text);
+        if (clean == _noteLoaded)
+        {
+            return;
+        }
+
+        _noteLoaded = clean;
+        try
+        {
+            notes.Save(target.Id, target.Path, text);
+            ShowMessage(Strings.Get(ImageNoteService.Clean(text).Length == 0 ? "Hist_NoteRemoved" : "Hist_NoteSaved"));
+        }
+        catch (Exception ex)
+        {
+            FileLog.Shared.Error("Saving the note failed", ex);
+            ShowMessage(LocationUi.Format("Hist_NoteFailed", ex.Message));
         }
     }
 

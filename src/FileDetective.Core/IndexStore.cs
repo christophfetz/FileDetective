@@ -1004,6 +1004,103 @@ public sealed class IndexStore : IDisposable
         }
     }
 
+    // ---------------------------------------------------------------- image notes (stage 13, PLAN.md 11.4)
+
+    /// <summary>Every stored note, on its own connection.</summary>
+    public IReadOnlyList<StoredImageNote> ReadImageNotes()
+    {
+        var result = new List<StoredImageNote>();
+        using var connection = _database.OpenConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT path, text, changed_utc FROM notes";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            result.Add(new StoredImageNote(r.GetString(0), r.GetString(1), r.GetInt64(2)));
+        }
+
+        return result;
+    }
+
+    /// <summary>Stores the note of the image at <paramref name="path"/>, replacing an older one (paths compare without case).</summary>
+    public void SaveImageNote(StoredImageNote note)
+    {
+        ArgumentNullException.ThrowIfNull(note);
+        lock (_writeLock)
+        {
+            using var cmd = Command(
+                _writeConnection, null,
+                "INSERT OR REPLACE INTO notes(path, text, changed_utc) VALUES(@p, @t, @c)");
+            cmd.Parameters.AddWithValue("@p", note.Path);
+            cmd.Parameters.AddWithValue("@t", note.Text);
+            cmd.Parameters.AddWithValue("@c", note.ChangedUnixSeconds);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>Removes the note of the image at <paramref name="path"/>.</summary>
+    /// <returns>True if there was one.</returns>
+    public bool DeleteImageNote(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        lock (_writeLock)
+        {
+            using var cmd = Command(_writeConnection, null, "DELETE FROM notes WHERE path = @p");
+            cmd.Parameters.AddWithValue("@p", path);
+            return cmd.ExecuteNonQuery() > 0;
+        }
+    }
+
+    /// <summary>
+    /// Gives the note of <paramref name="oldPath"/> the path <paramref name="newPath"/> (the image was moved or renamed); a
+    /// note already stored for the new path is replaced.
+    /// </summary>
+    /// <returns>True if a note was moved.</returns>
+    public bool MoveImageNote(string oldPath, string newPath)
+    {
+        ArgumentNullException.ThrowIfNull(oldPath);
+        ArgumentNullException.ThrowIfNull(newPath);
+        lock (_writeLock)
+        {
+            using var tx = _writeConnection.BeginTransaction();
+            string? text = null;
+            long changed = 0;
+            using (var read = Command(_writeConnection, tx, "SELECT text, changed_utc FROM notes WHERE path = @p"))
+            {
+                read.Parameters.AddWithValue("@p", oldPath);
+                using var r = read.ExecuteReader();
+                if (r.Read())
+                {
+                    text = r.GetString(0);
+                    changed = r.GetInt64(1);
+                }
+            }
+
+            if (text is null)
+            {
+                return false;
+            }
+
+            using (var delete = Command(_writeConnection, tx, "DELETE FROM notes WHERE path = @p"))
+            {
+                delete.Parameters.AddWithValue("@p", oldPath);
+                delete.ExecuteNonQuery();
+            }
+
+            using (var insert = Command(
+                _writeConnection, tx, "INSERT OR REPLACE INTO notes(path, text, changed_utc) VALUES(@p, @t, @c)"))
+            {
+                insert.Parameters.AddWithValue("@p", newPath);
+                insert.Parameters.AddWithValue("@t", text);
+                insert.Parameters.AddWithValue("@c", changed);
+                insert.ExecuteNonQuery();
+            }
+
+            tx.Commit();
+            return true;
+        }
+    }
+
     public void Dispose()
     {
         lock (_writeLock)

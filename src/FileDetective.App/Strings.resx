@@ -301,12 +301,12 @@ They are replaced by {0}. Continue?</value></data>
   <data name="Ocr_MsgFolderRemoved" xml:space="preserve"><value>{0} removed. The recognized text of its images was deleted.</value></data>
   <data name="Menu_History" xml:space="preserve"><value>Screenshot history…</value></data>
   <data name="Hist_Title" xml:space="preserve"><value>FileDetective – Screenshot history</value></data>
-  <data name="Hist_SearchPlaceholder" xml:space="preserve"><value>Search the text in your screenshots</value></data>
+  <data name="Hist_SearchPlaceholder" xml:space="preserve"><value>Search the text and the notes of your screenshots</value></data>
   <data name="Hist_AllFolders" xml:space="preserve"><value>All folders</value></data>
   <data name="Hist_Today" xml:space="preserve"><value>Today</value></data>
   <data name="Hist_Yesterday" xml:space="preserve"><value>Yesterday</value></data>
   <data name="Hist_DayHeader" xml:space="preserve"><value>{0} · {1:N0} images</value></data>
-  <data name="Hist_OffHint" xml:space="preserve"><value>Text recognition is off. The images of your folders are listed from the directory, but without their text you cannot search them.</value></data>
+  <data name="Hist_OffHint" xml:space="preserve"><value>Text recognition is off. The images of your folders are listed from the directory; the search finds only your notes.</value></data>
   <data name="Hist_NoFolders" xml:space="preserve"><value>No folder is chosen for the image text. Add folders in Settings &gt; Image text.</value></data>
   <data name="Hist_Empty" xml:space="preserve"><value>No images in the folders yet.</value></data>
   <data name="Hist_NoMatch" xml:space="preserve"><value>No image has this text.</value></data>
@@ -329,4 +329,10 @@ They are replaced by {0}. Continue?</value></data>
   <data name="Hist_HotkeyChanged" xml:space="preserve"><value>The shortcut of the screenshot history is now {0}.</value></data>
   <data name="Hist_HotkeyRemoved" xml:space="preserve"><value>The shortcut of the screenshot history was removed.</value></data>
   <data name="Hist_HotkeyFailedTitle" xml:space="preserve"><value>Shortcut of the screenshot history not available</value></data>
+  <data name="Ctx_OpenWith" xml:space="preserve"><value>Open with…</value></data>
+  <data name="Hist_NoteHeading" xml:space="preserve"><value>Note</value></data>
+  <data name="Hist_NotePlaceholder" xml:space="preserve"><value>Your own words for this image, e.g. what a photo shows. The search finds them.</value></data>
+  <data name="Hist_NoteSaved" xml:space="preserve"><value>Note saved.</value></data>
+  <data name="Hist_NoteRemoved" xml:space="preserve"><value>Note removed.</value></data>
+  <data name="Hist_NoteFailed" xml:space="preserve"><value>The note could not be saved: {0}</value></data>
 </root>

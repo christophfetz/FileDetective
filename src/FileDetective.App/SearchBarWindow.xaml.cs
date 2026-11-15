@@ -29,6 +29,7 @@ public partial class SearchBarWindow : Window
         DataContext = viewModel;
         Title = Strings.Get("Bar_Title");
         OpenMenuItem.Header = Strings.Get("Ctx_Open");
+        OpenWithMenuItem.Header = Strings.Get("Ctx_OpenWith");
         RevealMenuItem.Header = Strings.Get("Ctx_Reveal");
         CopyMenuItem.Header = Strings.Get("Ctx_CopyPath");
         CopyImageMenuItem.Header = Strings.Get("Ctx_CopyImage");
@@ -70,6 +71,7 @@ public partial class SearchBarWindow : Window
             FocusInput();
         };
         OpenMenuItem.Click += async (_, _) => await _viewModel.OpenSelectedAsync();
+        OpenWithMenuItem.Click += async (_, _) => await _viewModel.OpenSelectedWithAsync();
         RevealMenuItem.Click += async (_, _) => await _viewModel.RevealSelectedAsync();
         CopyMenuItem.Click += (_, _) => _viewModel.CopySelectedPath();
         CopyImageMenuItem.Click += (_, _) => _viewModel.CopySelectedImage();
@@ -292,6 +294,8 @@ public partial class SearchBarWindow : Window
         // PLAN.md 8.4: hits of an unreachable location can only have their path copied.
         bool canOpen = _viewModel.CanOpenSelected;
         OpenMenuItem.IsEnabled = canOpen;
+        OpenWithMenuItem.IsEnabled = canOpen;
+        OpenWithMenuItem.Visibility = _viewModel.SelectedItem.IsDirectory ? Visibility.Collapsed : Visibility.Visible;
         RevealMenuItem.IsEnabled = canOpen;
         var imageItems = _viewModel.SelectedIsImage ? Visibility.Visible : Visibility.Collapsed;
         CopyImageMenuItem.Visibility = imageItems;

@@ -67,6 +67,9 @@ public sealed record StoredImageText(int EntryId, long Size, long MTimeTicks, st
             && IndexStore.ToUnixSeconds(new DateTime(Math.Clamp(MTimeTicks, 0, DateTime.MaxValue.Ticks), DateTimeKind.Utc)) == entryMTimeUnixSeconds;
 }
 
+/// <summary>A row of <c>notes</c> (stage 13, PLAN.md 11.4): the user's own words for an image, keyed by its full path.</summary>
+public sealed record StoredImageNote(string Path, string Text, long ChangedUnixSeconds);
+
 /// <summary>A file written by a change: inserted (with its name) or updated (name null); also a moved or renamed entry.</summary>
 public readonly record struct WrittenFile(int Id, string? Name);
 

@@ -185,4 +185,44 @@ internal static class NativeMethods
             ILFree(pidl);
         }
     }
+    // ---------------------------------------------------------------- "Open with" (stage 13, PLAN.md 11.4)
+
+    private const int OAIF_ALLOW_REGISTRATION = 0x1;
+    private const int OAIF_EXEC = 0x4;
+    private const int HResultCancelled = unchecked((int)0x800704C7);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct OPENASINFO
+    {
+        public string pcszFile;
+        public string? pcszClass;
+        public int oaifInFlags;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SHOpenWithDialog(IntPtr hwndParent, ref OPENASINFO info);
+
+    /// <summary>Result of <see cref="OpenWith"/>.</summary>
+    public enum OpenWithResult
+    {
+        Opened,
+        Cancelled,
+        Failed,
+    }
+
+    /// <summary>
+    /// Shows the Windows dialog "How do you want to open this file?" and opens the file with the chosen app (the dialog of
+    /// "Choose another app" in Explorer). Blocks until the dialog is closed. <paramref name="hr"/> is the error code on failure.
+    /// </summary>
+    public static OpenWithResult OpenWith(IntPtr owner, string fullPath, out int hr)
+    {
+        var info = new OPENASINFO { pcszFile = fullPath, pcszClass = null, oaifInFlags = OAIF_ALLOW_REGISTRATION | OAIF_EXEC };
+        hr = SHOpenWithDialog(owner, ref info);
+        return hr switch
+        {
+            0 => OpenWithResult.Opened,
+            HResultCancelled => OpenWithResult.Cancelled,
+            _ => OpenWithResult.Failed,
+        };
+    }
 }

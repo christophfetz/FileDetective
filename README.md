@@ -53,7 +53,7 @@ if you tick them. After that FileDetective runs quietly in the notification area
 | **Enter** or double click | Open |
 | **Ctrl+Enter** | Show in Explorer |
 | **Ctrl+C** | Copy the full path (when no text in the box is selected) |
-| **Right click** | Menu: Open, Show in Explorer, Copy path |
+| **Right click** | Menu: Open, Open with… (the Windows dialog to choose an app), Show in Explorer, Copy path |
 | **Esc** | Close |
 
 With an empty box the bar shows what you opened through it most recently. Hits are ranked: all words in the name first,
@@ -79,8 +79,14 @@ recognition language for you, the settings say how to add it without administrat
 The **screenshot history** (tray menu *Screenshot history…*, optionally a shortcut you choose in *Settings > Image text*;
 none is set by default) shows the images of those folders as a grid of previews, newest first and grouped by day. It has the
 same text search as the search bar (all words, `müller` finds `Mueller`) and a filter by folder. For the chosen image you can
-copy the image or its text, open it, show it in Explorer, drag it into a mail or a ticket as a file, and read the recognized
-text in a side panel with your search words marked. New screenshots appear by themselves. Nothing is deleted there. The list
+copy the image or its text, open it (also with another app through *Open with…*), show it in Explorer, drag it into a mail or
+a ticket as a file, and read the recognized text in a side panel with your search words marked.
+
+Above the text, the side panel has a **note** box for your own words, for example what a photo shows or the name on a
+crooked scan the recognition cannot read. The search of the history and the *Image text* mode of the search bar find the
+notes like the recognized text, also with the text recognition switched off. A note is saved in FileDetective's own index
+(never in the image or its name), so it exists on this computer only. It stays when you rebuild the index or switch the text
+recognition off; it moves with the image when FileDetective sees the image renamed, and it is removed when the image is gone. New screenshots appear by themselves. Nothing is deleted there. The list
 comes from FileDetective's own index (no folder is listed again for it); previews are made for local images only, never for
 cloud-only files. With the text recognition off the window still lists the images, but there is no text to search.
 
@@ -110,7 +116,7 @@ Everything is in `%LOCALAPPDATA%\FileDetective` (the *Settings > About* page has
 
 | File | Content |
 |---|---|
-| `index.db` | The index of names (SQLite) and the list of items you opened |
+| `index.db` | The index of names (SQLite), the list of items you opened, the recognized image text and your image notes |
 | `settings.json` | Your settings |
 | `filedetective.log`, `.old` | Log, at most about 2 MB |
 | `update-state.json`, `update\` | Day of the last update check, temporary update download |

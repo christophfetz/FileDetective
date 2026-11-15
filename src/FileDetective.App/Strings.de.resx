@@ -301,12 +301,12 @@ Sie werden durch {0} ersetzt. Fortfahren?</value></data>
   <data name="Ocr_MsgFolderRemoved" xml:space="preserve"><value>{0} entfernt. Der erkannte Text seiner Bilder wurde gelöscht.</value></data>
   <data name="Menu_History" xml:space="preserve"><value>Screenshot-Verlauf …</value></data>
   <data name="Hist_Title" xml:space="preserve"><value>FileDetective – Screenshot-Verlauf</value></data>
-  <data name="Hist_SearchPlaceholder" xml:space="preserve"><value>Text in Ihren Screenshots suchen</value></data>
+  <data name="Hist_SearchPlaceholder" xml:space="preserve"><value>Text und Notizen Ihrer Screenshots durchsuchen</value></data>
   <data name="Hist_AllFolders" xml:space="preserve"><value>Alle Ordner</value></data>
   <data name="Hist_Today" xml:space="preserve"><value>Heute</value></data>
   <data name="Hist_Yesterday" xml:space="preserve"><value>Gestern</value></data>
   <data name="Hist_DayHeader" xml:space="preserve"><value>{0} · {1:N0} Bilder</value></data>
-  <data name="Hist_OffHint" xml:space="preserve"><value>Die Texterkennung ist aus. Die Bilder Ihrer Ordner werden aus dem Verzeichnis aufgelistet, aber ohne ihren Text lassen sie sich nicht durchsuchen.</value></data>
+  <data name="Hist_OffHint" xml:space="preserve"><value>Die Texterkennung ist aus. Die Bilder Ihrer Ordner werden aus dem Verzeichnis aufgelistet; die Suche findet nur Ihre Notizen.</value></data>
   <data name="Hist_NoFolders" xml:space="preserve"><value>Für den Bildtext ist kein Ordner gewählt. Ordner lassen sich unter Einstellungen &gt; Bildtext hinzufügen.</value></data>
   <data name="Hist_Empty" xml:space="preserve"><value>In den Ordnern liegen noch keine Bilder.</value></data>
   <data name="Hist_NoMatch" xml:space="preserve"><value>Kein Bild enthält diesen Text.</value></data>
@@ -329,4 +329,10 @@ Sie werden durch {0} ersetzt. Fortfahren?</value></data>
   <data name="Hist_HotkeyChanged" xml:space="preserve"><value>Das Kürzel des Screenshot-Verlaufs ist jetzt {0}.</value></data>
   <data name="Hist_HotkeyRemoved" xml:space="preserve"><value>Das Kürzel des Screenshot-Verlaufs wurde entfernt.</value></data>
   <data name="Hist_HotkeyFailedTitle" xml:space="preserve"><value>Kürzel des Screenshot-Verlaufs nicht verfügbar</value></data>
+  <data name="Ctx_OpenWith" xml:space="preserve"><value>Öffnen mit …</value></data>
+  <data name="Hist_NoteHeading" xml:space="preserve"><value>Notiz</value></data>
+  <data name="Hist_NotePlaceholder" xml:space="preserve"><value>Eigene Worte zu diesem Bild, z. B. was auf einem Foto zu sehen ist. Die Suche findet sie.</value></data>
+  <data name="Hist_NoteSaved" xml:space="preserve"><value>Notiz gespeichert.</value></data>
+  <data name="Hist_NoteRemoved" xml:space="preserve"><value>Notiz entfernt.</value></data>
+  <data name="Hist_NoteFailed" xml:space="preserve"><value>Die Notiz konnte nicht gespeichert werden: {0}</value></data>
 </root>

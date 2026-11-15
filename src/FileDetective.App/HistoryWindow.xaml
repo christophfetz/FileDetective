@@ -127,6 +127,7 @@
                 <MenuItem x:Name="MenuCopyImage" />
                 <MenuItem x:Name="MenuCopyText" />
                 <MenuItem x:Name="MenuOpen" />
+                <MenuItem x:Name="MenuOpenWith" />
                 <MenuItem x:Name="MenuReveal" />
                 <Separator />
                 <MenuItem x:Name="MenuCopyPath" />
@@ -149,6 +150,8 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
           </Grid.RowDefinitions>
           <StackPanel>
@@ -161,10 +164,18 @@
             <Button x:Name="CopyImageButton" Padding="10,5" MinWidth="0" Margin="0,0,6,6" />
             <Button x:Name="CopyTextButton" Padding="10,5" MinWidth="0" Margin="0,0,6,6" />
             <Button x:Name="OpenButton" Padding="10,5" MinWidth="0" Margin="0,0,6,6" />
+            <Button x:Name="OpenWithButton" Padding="10,5" MinWidth="0" Margin="0,0,6,6" />
             <Button x:Name="RevealButton" Padding="10,5" MinWidth="0" Margin="0,0,6,6" />
           </WrapPanel>
-          <TextBlock x:Name="TextHeading" Grid.Row="2" Style="{StaticResource LabelText}" Margin="0,8,0,4" />
-          <RichTextBox x:Name="TextView" Grid.Row="3" IsReadOnly="True" IsReadOnlyCaretVisible="False"
+          <TextBlock x:Name="NoteHeading" Grid.Row="2" Style="{StaticResource LabelText}" Margin="0,8,0,4" />
+          <Grid Grid.Row="3">
+            <TextBox x:Name="NoteBox" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="58" MaxHeight="140"
+                     VerticalScrollBarVisibility="Auto" Padding="6,5" />
+            <TextBlock x:Name="NotePlaceholder" IsHitTestVisible="False" Margin="9,6,8,0" TextWrapping="Wrap"
+                       Foreground="{StaticResource MutedBrush}" />
+          </Grid>
+          <TextBlock x:Name="TextHeading" Grid.Row="4" Style="{StaticResource LabelText}" Margin="0,12,0,4" />
+          <RichTextBox x:Name="TextView" Grid.Row="5" IsReadOnly="True" IsReadOnlyCaretVisible="False"
                        VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                        BorderThickness="0" Background="Transparent" Padding="0" IsDocumentEnabled="False">
             <RichTextBox.Document>

@@ -33,6 +33,7 @@ internal sealed class IndexService : IDisposable
     private LocalWatcher? _watcher;
     private ImageTextService? _imageText;
     private ImageHistory? _history;
+    private ImageNoteService? _notes;
     private DriveDiscovery? _drives;
     private readonly SemaphoreSlim _imageTextGate = new(1, 1);
     private (bool Enabled, string Folders)? _imageTextApplied;
@@ -78,6 +79,9 @@ internal sealed class IndexService : IDisposable
 
     /// <summary>The screenshot history (stage 12); null until the directory is loaded.</summary>
     public ImageHistory? History => _history;
+
+    /// <summary>The notes of images (stage 13); null until the directory is loaded.</summary>
+    public ImageNoteService? Notes => _notes;
 
     /// <summary>
     /// Raised on a background thread when a change of the directory can alter the list of the history (an image came,
@@ -200,6 +204,21 @@ internal sealed class IndexService : IDisposable
             int loaded = store.LoadIntoMemory(token);
             FileLog.Shared.Info($"Directory loaded: {loaded} entries in {timer.ElapsedMilliseconds} ms.");
             usage.Reload();
+
+            // Stage 13: notes are attached to the images of the loaded directory; a change shows like new image text.
+            var notes = new ImageNoteService(
+                store, texts, resolver, SystemLocalFileAccess.Instance, path => drives.Describe(path) is { Kind: RootKind.Local });
+            try
+            {
+                notes.Load();
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                FileLog.Shared.Error("Loading the image notes failed", ex);
+            }
+
+            notes.Changed += RaiseImageTextChanged;
+            _notes = notes;
             RefreshRoots(store);
             UpdateScanState(store);
 

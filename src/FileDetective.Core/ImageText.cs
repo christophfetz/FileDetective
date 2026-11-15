@@ -364,10 +364,16 @@ public sealed record ImageTextSnippet(string Text, IReadOnlyList<TextSegment> Se
 /// The recognized texts in memory (PLAN.md 11.3, "Speicher"): per entry the text in search form (6.2) and the last write
 /// time of the image. Thread-safe. A few thousand screenshots take a few MB.
 /// </summary>
+/// <remarks>
+/// Stage 13 (PLAN.md 11.4) adds the notes of the user: kept apart from the recognized texts, so <see cref="Clear"/>,
+/// <see cref="Count"/>, <see cref="Contains"/> and <see cref="Ids"/> concern the recognized texts only, while
+/// <see cref="Find"/> searches both: a term may stand in the note and another in the text.
+/// </remarks>
 public sealed class ImageTextIndex
 {
     private readonly object _gate = new();
     private readonly Dictionary<int, (byte[] Form, long MTimeTicks)> _texts = [];
+    private readonly Dictionary<int, (string Text, byte[] Form, long MTimeTicks)> _notes = [];
 
     /// <summary>Number of images with a recognized text (an empty text counts: the image was read).</summary>
     public int Count
@@ -439,9 +445,55 @@ public sealed class ImageTextIndex
         }
     }
 
+    /// <summary>Sets the note of an image (stage 13); <paramref name="mtimeTicks"/> orders it when it has no recognized text.</summary>
+    public void SetNote(int entryId, string text, long mtimeTicks)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var form = SearchForm(text);
+        lock (_gate)
+        {
+            _notes[entryId] = (text, form, mtimeTicks);
+        }
+    }
+
+    /// <summary>The note of an image, or null.</summary>
+    public string? GetNote(int entryId)
+    {
+        lock (_gate)
+        {
+            return _notes.TryGetValue(entryId, out var note) ? note.Text : null;
+        }
+    }
+
+    public bool RemoveNote(int entryId)
+    {
+        lock (_gate)
+        {
+            return _notes.Remove(entryId);
+        }
+    }
+
+    /// <summary>Forgets all notes in memory (the stored ones stay).</summary>
+    public void ClearNotes()
+    {
+        lock (_gate)
+        {
+            _notes.Clear();
+        }
+    }
+
+    /// <summary>The text shown for an image: the note, then the recognized text, each only if present.</summary>
+    public static string Combine(string? note, string? text)
+    {
+        bool hasNote = !string.IsNullOrWhiteSpace(note);
+        bool hasText = !string.IsNullOrWhiteSpace(text);
+        return hasNote && hasText ? note!.Trim() + "\n" + text : hasNote ? note!.Trim() : text ?? string.Empty;
+    }
+
     /// <summary>
-    /// Entry numbers of all images whose text contains every term of <paramref name="query"/>, newest image first (equal
-    /// times: higher entry number first). Without terms: all images, newest first.
+    /// Entry numbers of all images whose text and note together contain every term of <paramref name="query"/> (each term in
+    /// the one or the other), newest image first (equal times: higher entry number first). Without terms: all images with a
+    /// text or a note, newest first.
     /// </summary>
     public IReadOnlyList<int> Find(SearchQuery query, CancellationToken cancellationToken = default)
     {
@@ -457,17 +509,16 @@ public sealed class ImageTextIndex
                     cancellationToken.ThrowIfCancellationRequested();
                 }
 
-                bool all = true;
-                foreach (var term in query.TermBytes)
+                byte[]? note = _notes.TryGetValue(id, out var noted) ? noted.Form : null;
+                if (MatchesAll(query, form, note))
                 {
-                    if (form.AsSpan().IndexOf(term) < 0)
-                    {
-                        all = false;
-                        break;
-                    }
+                    hits.Add((id, mtime));
                 }
+            }
 
-                if (all)
+            foreach (var (id, (_, form, mtime)) in _notes)
+            {
+                if (!_texts.ContainsKey(id) && MatchesAll(query, form, null))
                 {
                     hits.Add((id, mtime));
                 }
@@ -476,6 +527,19 @@ public sealed class ImageTextIndex
 
         hits.Sort(static (a, b) => a.MTime != b.MTime ? b.MTime.CompareTo(a.MTime) : b.Id.CompareTo(a.Id));
         return [.. hits.Select(h => h.Id)];
+    }
+
+    private static bool MatchesAll(SearchQuery query, byte[] form, byte[]? other)
+    {
+        foreach (var term in query.TermBytes)
+        {
+            if (form.AsSpan().IndexOf(term) < 0 && (other is null || other.AsSpan().IndexOf(term) < 0))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
 
@@ -535,7 +599,7 @@ public sealed class ImageTextSearch(
                     break;
                 }
 
-                string text = stored.TryGetValue(id, out var row) ? row.Text : string.Empty;
+                string text = ImageTextIndex.Combine(texts.GetNote(id), stored.TryGetValue(id, out var row) ? row.Text : null);
                 hits.Add(new SearchHit(id, d, 0, 0, ImageTextSnippet.Create(text, query)));
             }
         }

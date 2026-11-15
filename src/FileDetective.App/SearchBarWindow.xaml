@@ -193,6 +193,7 @@
         <ListBox.ContextMenu>
           <ContextMenu x:Name="HitMenu">
             <MenuItem x:Name="OpenMenuItem" />
+            <MenuItem x:Name="OpenWithMenuItem" />
             <MenuItem x:Name="RevealMenuItem" />
             <MenuItem x:Name="CopyMenuItem" />
             <MenuItem x:Name="CopyImageMenuItem" />

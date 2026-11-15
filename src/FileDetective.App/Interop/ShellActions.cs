@@ -23,6 +23,25 @@ internal static class ShellActions
         }
     }
 
+    /// <summary>
+    /// "Open with …" (stage 13): the Windows dialog to choose an app, which then opens the file. Returns true if an app was
+    /// chosen, false if the dialog was cancelled; <paramref name="error"/> is set if it failed.
+    /// </summary>
+    public static bool OpenWith(IntPtr owner, string fullPath, out string? error)
+    {
+        error = null;
+        switch (NativeMethods.OpenWith(owner, fullPath, out int hr))
+        {
+            case NativeMethods.OpenWithResult.Opened:
+                return true;
+            case NativeMethods.OpenWithResult.Cancelled:
+                return false;
+            default:
+                error = new Win32Exception(hr).Message;
+                return false;
+        }
+    }
+
     /// <summary>Shows the item selected in an Explorer window. Returns an error text, or null on success.</summary>
     public static string? RevealInExplorer(string fullPath)
     {

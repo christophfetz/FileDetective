@@ -218,10 +218,13 @@ internal sealed partial class SearchBarViewModel : ObservableObject
     }
 
     /// <summary>Enter / double click.</summary>
-    public Task OpenSelectedAsync() => ActOnSelectedAsync(open: true);
+    public Task OpenSelectedAsync() => ActOnSelectedAsync(HitAction.Open);
+
+    /// <summary>Context menu "Open with …" (stage 13): the Windows dialog to choose an app; files only.</summary>
+    public Task OpenSelectedWithAsync() => SelectedItem is { IsDirectory: false } ? ActOnSelectedAsync(HitAction.OpenWith) : Task.CompletedTask;
 
     /// <summary>Ctrl+Enter.</summary>
-    public Task RevealSelectedAsync() => ActOnSelectedAsync(open: false);
+    public Task RevealSelectedAsync() => ActOnSelectedAsync(HitAction.Reveal);
 
     /// <summary>Ctrl+C with no text selected in the input box, and the context menu.</summary>
     public void CopySelectedPath()
@@ -403,8 +406,16 @@ internal sealed partial class SearchBarViewModel : ObservableObject
         RefreshFooter();
     }
 
-    private async Task ActOnSelectedAsync(bool open)
+    private enum HitAction
     {
+        Open,
+        OpenWith,
+        Reveal,
+    }
+
+    private async Task ActOnSelectedAsync(HitAction action)
+    {
+        bool open = action != HitAction.Reveal;
         if (_busy || SelectedItem is not { } item || _index.Store is not { } store)
         {
             return;
@@ -434,7 +445,26 @@ internal sealed partial class SearchBarViewModel : ObservableObject
             switch (result)
             {
                 case ExistenceResult.Exists:
-                    string? error = open ? ShellActions.Open(path) : ShellActions.RevealInExplorer(path);
+                    string? error = null;
+                    if (action == HitAction.OpenWith)
+                    {
+                        // The dialog is modal: the bar goes first, the chosen app then comes to the front.
+                        CloseRequested?.Invoke();
+                        if (!ShellActions.OpenWith(IntPtr.Zero, path, out error))
+                        {
+                            if (error is not null)
+                            {
+                                FileLog.Shared.Error($"Open with failed: {error}");
+                            }
+
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        error = action == HitAction.Open ? ShellActions.Open(path) : ShellActions.RevealInExplorer(path);
+                    }
+
                     if (error is not null)
                     {
                         SetTransient(string.Format(CultureInfo.CurrentCulture, Strings.Get("Footer_OpenFailed"), error));

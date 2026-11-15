@@ -85,6 +85,16 @@ public sealed class IndexDatabase : IDisposable
         END;
         """;
 
+    // Stage 13 (PLAN.md 11.4). Notes of images, keyed by the full path, not by the entry number: rebuilding and renumbering
+    // the directory leave them alone, and switching the image text off does not touch them. No trigger.
+    private const string NotesExtensionSql = """
+        CREATE TABLE IF NOT EXISTS notes(
+          path TEXT PRIMARY KEY COLLATE NOCASE,
+          text TEXT NOT NULL,
+          changed_utc INTEGER NOT NULL
+        );
+        """;
+
     private const int SqliteBusy = 5;
     private const int SqliteLocked = 6;
 
@@ -186,7 +196,7 @@ public sealed class IndexDatabase : IDisposable
         bool hadOcrTrigger = Exists(connection, transaction, "trigger", OcrTrigger);
         using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = ExtensionSql + OcrExtensionSql;
+        command.CommandText = ExtensionSql + OcrExtensionSql + NotesExtensionSql;
         command.ExecuteNonQuery();
         if (hadTable && !hadTrigger && !hashesAreMapped)
         {
