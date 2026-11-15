@@ -595,6 +595,71 @@ Abnahme durch Tests: gleiche Größe mit verschiedenem Inhalt ist keine Dublette
 - Mindestgröße: Einstellung `duplicateMinSize` in `settings.json`, Standard 1 MB, bereinigt auf 1 KB bis 1 TB (0 oder kleiner wird 1 MB). Auswahl im Dubletten-Fenster (64 KB bis 1 GB; ein von Hand eingetragener Wert erscheint zusätzlich).
 - Nur in Gruppen, deren Größe mindestens zweimal vorkommt, wird überhaupt eine Datei angefasst; Pfade werden über `DatabaseEntryResolver` aufgelöst.
 
+### 11.3 Version 3 – Bildtext und Verlauf
+
+Mit dem Nutzer festgelegt am 2026-11-15. Version 3 beginnt erst nach dem Test des Nutzers und dem Firmentest des Stands nach Etappe 10. Anlass: Im Service entstehen viele Screenshots, die man später über den Text darin wiederfinden will. Die Funktion hängt von keinem anderen Programm ab. Wer ScreenKeeper (boehla) nutzt, bekommt dessen Angaben als Zusatz mit (siehe unten).
+
+**Etappe 11 – Bildtext (hoch)**
+
+Ordner:
+- Einstellung `ocrFolders`: Liste lokaler Ordner. Vorbelegt ist nur der Windows-Standardordner für Screenshots (Known Folder `Screenshots`), wohin er auch umgeleitet ist, auch nach OneDrive. Weitere Ordner lassen sich in den Einstellungen hinzufügen und entfernen.
+- Nur lokale Ordner. Netzlaufwerke und UNC-Pfade werden abgelehnt, weil die Texterkennung jedes Bild öffnen muss (Regel 1).
+- Liegt ein Ordner in keinem Ort, wird er automatisch als eigener lokaler Ort hinzugefügt, wie die Startmenü-Ordner (7.3).
+- Wird ein Ordner aus der Liste entfernt, wird sein gespeicherter Text sofort gelöscht. Wird er auch als Ort entfernt, verschwinden zusätzlich seine Einträge wie bisher.
+
+Dateien:
+- Gelesen werden `.png`, `.jpg`, `.jpeg`, `.bmp`, `.gif` (nur das erste Bild), `.tif` und `.tiff`.
+- Übersprungen werden `*.thumb.jpg`, Dateien unter 5 KB, Dateien über 50 MB und Dateien, die nur in der Cloud liegen (Attribute wie in 11.1 und 11.2). Diese werden nie geöffnet, weil das einen Download auslösen würde.
+- PDFs gehören nicht dazu.
+
+Erkennung:
+- Mit der in Windows eingebauten Texterkennung `Windows.Media.Ocr`, offline, in den Sprachen des Benutzerprofils. Es verlässt nichts den Rechner.
+- Fehlt das OCR-Paket einer Sprache, zeigen die Einstellungen einen Hinweis, wie man es ohne Adminrechte nachinstalliert.
+- Bilder werden mit `Windows.Graphics.Imaging` gelesen. Was größer ist als `OcrEngine.MaxImageDimension`, wird verkleinert.
+- Dafür wechselt das Zielframework auf `net10.0-windows10.0.19041.0`. Das ist kein neues NuGet-Paket, sondern die Windows-Projektion des .NET SDK. Die einzelne `.exe` wird dadurch größer; der Zuwachs wird gemessen und im Changelog festgehalten. Veröffentlichung als einzelne Datei und Installer müssen weiter funktionieren.
+- Neue und geänderte Bilder kommen über Durchlauf und Watcher in eine Warteschlange. Beim ersten Mal werden alle vorhandenen Bilder nachgeholt.
+- Gelesen wird auf einem eigenen Thread mit niedrigster Priorität (wie `LowPriorityWork` in Etappe 10), abbrechbar beim Beenden.
+- Der Fortschritt steht in den Einstellungen, z. B. „Bildtext: 120 von 3.400 erkannt“.
+
+Speicher:
+- Tabelle `ocr(entry_id, size, mtime, text)` in `index.db`, eingeführt wie `hashes` (`CREATE … IF NOT EXISTS`, Löschtrigger, Übernahme bei der Neunummerierung). Die Schemaversion bleibt; ein bestehendes Verzeichnis wird nie verworfen.
+- Ein Text gilt nur, solange Größe und Datum des Bildes stimmen.
+- Im Arbeitsspeicher liegt der Text in Suchform (6.2) je Eintrag. Bei einigen tausend Bildern sind das wenige MB.
+
+Suche:
+- Tab-Modus „Bildtext“ als fünfter Modus: Alles → Dateien → Ordner → Programme → Bildtext. Bildtext-Treffer gibt es nur in diesem Modus, nie unter „Alles“.
+- Ein Treffer ist ein Bild, in dessen Text alle Begriffe vorkommen. Neueste Bilder zuerst, höchstens 100 Treffer.
+- Jede Zeile zeigt links ein kleines Vorschaubild (etwa 64 px, von Windows wie im Explorer, nur für lokale Bilder), dazu den Namen und eine Textstelle um den ersten Treffer mit hervorgehobenen Begriffen. Eine große Vorschau gibt es in der Suchleiste nicht.
+- Enter öffnet das Bild, Strg+Enter zeigt es im Explorer, Strg+C kopiert das Bild, Strg+Umschalt+C den erkannten Text.
+- Bei leerer Eingabe zeigt der Modus die neuesten Bilder.
+
+ScreenKeeper als Zusatz:
+- Liegt neben einem Bild eine ScreenKeeper-Datei `<name>.json` mit `formatVersion` 1, werden `comment`, die Fenstertitel aus `windows[].title` und ein vorhandenes `ocrText` mit durchsucht.
+- Diese Dateien werden nur gelesen, nie geschrieben.
+
+Abnahme durch Tests:
+- Cloud-Dateien werden nie geöffnet; eine Attrappe zählt die Zugriffe.
+- Netzwerkordner werden abgelehnt.
+- Ein geändertes Bild macht den Text ungültig.
+- Das Entfernen eines Ordners löscht seinen Text.
+- Eine bestehende Datenbank wird ohne Verlust erweitert.
+- Suchform und Textstelle sind korrekt.
+- Der Tab-Zyklus enthält „Bildtext“.
+- `*.thumb.jpg` und die Größengrenzen werden übersprungen.
+
+Gemessen und im Changelog festgehalten: Erkennungsdauer je Screenshot und Größe der `.exe`.
+
+**Etappe 12 – Verlauf (normal)**
+
+- Eigenes Fenster „Screenshot-Verlauf“, erreichbar über das Infobereich-Menü. Ein eigenes Tastenkürzel lässt sich in den Einstellungen setzen; ab Werk ist keins belegt.
+- Raster aus Vorschaubildern der Bildtext-Ordner, neueste zuerst, nach Tagen gruppiert, virtualisiert und flüssig auch bei 5.000 und mehr Bildern.
+- Oben ein Suchfeld mit derselben Bildtext-Suche, dazu ein Filter nach Ordner.
+- Je Bild:
+  - Bild kopieren, Text kopieren, öffnen, im Explorer zeigen;
+  - per Ziehen in Mail oder Ticket ablegen (als Datei);
+  - den erkannten Text in einem Seitenbereich anzeigen.
+- Kein Löschen in diesem Fenster.
+
 ## 12. Stand
 
 - [x] Etappe 0 – Projektgerüst
@@ -609,10 +674,12 @@ Abnahme durch Tests: gleiche Größe mit verschiedenem Inhalt ist keine Dublette
 - [ ] Firmentest
 - [x] Etappe 9 – Speicherplatz
 - [x] Etappe 10 – Dubletten
+- [ ] Etappe 11 – Bildtext (erst nach dem Firmentest)
+- [ ] Etappe 12 – Verlauf (erst nach dem Firmentest)
 
 ## 13. Bewusst nicht enthalten
 
-- Suche nach Dateiinhalt oder Bedeutung, OCR, KI-Funktionen
+- Suche nach Dateiinhalt oder Bedeutung, KI-Funktionen. Einzige Ausnahme ist ab Version 3 der Bildtext in gewählten lokalen Ordnern (11.3). OCR von PDFs und Texterkennung auf Freigaben bleiben ausgeschlossen.
 - Tippfehler-Toleranz
 - macOS, Linux, ARM64
 - zentrale Konfiguration oder Verteilung durch eine IT-Abteilung
