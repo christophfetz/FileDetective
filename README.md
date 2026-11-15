@@ -28,7 +28,7 @@ Each release has two downloads:
 `SHA256SUMS.txt` lists the checksums of both files. To check a download, run in PowerShell:
 `Get-FileHash .\FileDetective-<version>-win-x64.zip -Algorithm SHA256`, and compare the result with the file.
 
-Both downloads contain the .NET runtime (the exe is about 75 MB). The single exe unpacks a few native libraries into
+Both downloads contain the .NET runtime (the exe is about 85 MB). The single exe unpacks a few native libraries into
 `%TEMP%\.net` at its first start.
 
 ### SmartScreen warning
@@ -48,7 +48,7 @@ if you tick them. After that FileDetective runs quietly in the notification area
 | *typing* | Search. Several words in any order, all must appear in the name or the path. Upper/lower case does not matter, `müller` finds `Mueller`. |
 | `.pdf` | A word like `.pdf` filters by file type: `invoice .pdf` |
 | `"two words"` | Quotes keep words together |
-| **Tab** / **Shift+Tab** | Switch between All, Files and Folders |
+| **Tab** / **Shift+Tab** | Switch between All, Files, Folders, Programs and (if switched on) Image text |
 | **Up/Down**, **PgUp/PgDn** | Move the selection |
 | **Enter** or double click | Open |
 | **Ctrl+Enter** | Show in Explorer |
