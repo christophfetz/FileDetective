@@ -6,10 +6,7 @@ FileDetective is a small Windows tray program. Press **Alt+Space** from any prog
 compact index of file and folder **names** in memory and searches it as you type. It reads names only, never the content
 of your files.
 
-<!-- Screenshot: put a picture of the search bar at docs/screenshot.png and uncomment the next line.
 ![The FileDetective search bar](docs/screenshot.png)
--->
-*(Screenshot follows.)*
 
 - Windows 10 (version 2004) or Windows 11, 64-bit. No administrator rights, no .NET installation needed.
 - Free software under the MIT license. No telemetry, no account, no ads.
