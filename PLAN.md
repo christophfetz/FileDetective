@@ -46,7 +46,7 @@ Diese Regeln gelten in jeder Etappe und dürfen nie verletzt werden. Sie sind de
 | Updates | Hinweis auf neue Version, Installation per Klick |
 | Sprache | Oberfläche Deutsch und Englisch nach Windows-Sprache, Anleitung Englisch |
 | Lizenz | MIT |
-| Veröffentlichung | Repository erst öffentlich, wenn v1 lokal und am Firmen-Fileshare getestet ist |
+| Veröffentlichung | Ursprünglich erst nach dem Firmentest. Geändert am 2026-11-15: Auf Wunsch des Nutzers wird das Repository mit Version 0.3.0 öffentlich und bekommt sein erstes Release; der Firmentest folgt danach. Die Commits tragen die noreply-Adresse von GitHub. |
 | Speicherplatz (v2) | aufklappbare Ordnerliste mit Größenbalken, kein Kachelbild, Freigaben mit dabei |
 | Dubletten (v2) | Inhaltsvergleich nur lokal, auf Freigaben nur „mögliche Dubletten“ nach Name und Größe |
 | Löschen (v2) | nur lokal, nur in den Papierkorb, nur auf Klick |
