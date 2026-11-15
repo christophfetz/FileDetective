@@ -515,7 +515,7 @@ Abnahme: Ein Versions-Tag erzeugt ein Release mit beiden Downloads. Installer un
 
 Version 2 beginnt erst, wenn Version 1 veröffentlicht ist. Die Abschnitte legen die Richtung fest; die Einzelheiten werden vor Beginn mit dem Nutzer bestätigt.
 
-Geändert am 2026-11-14: Auf Wunsch des Nutzers werden die Etappen 9 und 10 vorgezogen, nach seinem ersten Test von Version 1 und vor der Veröffentlichung. Sie werden wie hier beschrieben umgesetzt. Einzelheiten, die hier nicht festgelegt sind, entscheidet die Umsetzung und hält sie in diesem Abschnitt fest. Der Firmentest bleibt Voraussetzung für das Öffentlichmachen und gilt dann für alles zusammen.
+Geändert am 2026-11-14: Auf Wunsch des Nutzers werden die Etappen 9 und 10 vorgezogen, nach seinem ersten Test von Version 1 und vor der Veröffentlichung. Sie werden wie hier beschrieben umgesetzt. Einzelheiten, die hier nicht festgelegt sind, entscheidet die Umsetzung und hält sie in diesem Abschnitt fest. Der Firmentest gilt dann für alles zusammen; öffentlich wurde das Repository auf Wunsch des Nutzers schon vorher (Abschnitt 4, 2026-11-15).
 
 ### 11.1 Etappe 9 – Speicherplatz (normal)
 
