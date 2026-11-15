@@ -1,0 +1,25 @@
+name: Feature request
+description: An idea or a wish for FileDetective.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        English or German is fine. FileDetective stays small on purpose: it finds files by name, never opens files on
+        network shares, never writes where it searches and sends no telemetry (see "Known limits" in the README).
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do?
+      description: Describe the task or the problem, not only the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could FileDetective help?
+  - type: textarea
+    id: other
+    attributes:
+      label: Anything else? (optional)
+      description: How you work around it today, other programs that do it, screenshots.
