@@ -597,7 +597,7 @@ Abnahme durch Tests: gleiche Größe mit verschiedenem Inhalt ist keine Dublette
 
 ### 11.3 Version 3 – Bildtext und Verlauf
 
-Mit dem Nutzer festgelegt am 2026-11-15. Version 3 beginnt erst nach dem Test des Nutzers und dem Firmentest des Stands nach Etappe 10. Anlass: Im Service entstehen viele Screenshots, die man später über den Text darin wiederfinden will. Die Funktion hängt von keinem anderen Programm ab und liest keine Dateien anderer Screenshot-Programme mit.
+Mit dem Nutzer festgelegt am 2026-11-15. Ursprünglich sollte Version 3 erst nach dem Firmentest beginnen; am selben Tag hat der Nutzer entschieden, sie sofort umzusetzen. Der Firmentest gilt dann für alles zusammen. Anlass: Im Service entstehen viele Screenshots, die man später über den Text darin wiederfinden will. Die Funktion hängt von keinem anderen Programm ab und liest keine Dateien anderer Screenshot-Programme mit.
 
 **Etappe 11 – Bildtext (hoch)**
 
@@ -678,8 +678,8 @@ Gemessen und im Changelog festgehalten: Erkennungsdauer je Screenshot und Größ
 - [ ] Firmentest
 - [x] Etappe 9 – Speicherplatz
 - [x] Etappe 10 – Dubletten
-- [ ] Etappe 11 – Bildtext (erst nach dem Firmentest)
-- [ ] Etappe 12 – Verlauf (erst nach dem Firmentest)
+- [ ] Etappe 11 – Bildtext
+- [ ] Etappe 12 – Verlauf
 
 ## 13. Bewusst nicht enthalten
 
