@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix (issue 1): in the search bar a click on the file name did not select the row, and double click and right click threw `InvalidOperationException` ("'Run' is not a Visual"). `ItemUnder` now climbs the logical tree for non-visuals such as `Run`; a left click selects the row under the pointer (the rows are not focusable, so the list box did not select them itself).
+
 ## 0.3.0
 
 - Stage 13: "Open with" and image notes (PLAN.md 11.4), decided with the user after the first test of version 3: photos and crooked scans have no text the recognition can read, so they could not be found.

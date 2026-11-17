@@ -61,6 +61,7 @@ public partial class SearchBarWindow : Window
 
         PreviewKeyDown += OnPreviewKeyDown;
         PreviewMouseUp += (_, _) => FocusInput();
+        HitList.PreviewMouseLeftButtonDown += OnHitLeftButtonDown;
         HitList.MouseDoubleClick += OnHitDoubleClick;
         HitList.PreviewMouseRightButtonDown += OnHitRightButtonDown;
         HitList.ContextMenuOpening += (_, e) => OnHitListContextMenuOpening(e);
@@ -274,6 +275,15 @@ public partial class SearchBarWindow : Window
         }
     }
 
+    private void OnHitLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        // The rows are not focusable, so the list box does not select them by itself.
+        if (ItemUnder(e.OriginalSource as DependencyObject) is { } item)
+        {
+            item.IsSelected = true;
+        }
+    }
+
     private void OnHitRightButtonDown(object sender, MouseButtonEventArgs e)
     {
         // Right click selects the row under the pointer so that the menu acts on it.
@@ -306,7 +316,10 @@ public partial class SearchBarWindow : Window
     {
         while (source is not null and not ListBoxItem)
         {
-            source = VisualTreeHelper.GetParent(source) ?? LogicalTreeHelper.GetParent(source);
+            // A Run (text inside a TextBlock) is a ContentElement, not a Visual: VisualTreeHelper throws for it.
+            source = source is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(source) ?? LogicalTreeHelper.GetParent(source)
+                : LogicalTreeHelper.GetParent(source);
         }
 
         return source as ListBoxItem;
