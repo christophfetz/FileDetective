@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.1
 
 - Fix (issue 1): in the search bar a click on the file name did not select the row, and double click and right click threw `InvalidOperationException` ("'Run' is not a Visual"). `ItemUnder` now climbs the logical tree for non-visuals such as `Run`; a left click selects the row under the pointer (the rows are not focusable, so the list box did not select them itself).
 
