@@ -137,7 +137,12 @@ public class FileLogTests : IDisposable
             var log = FileLog.Initialize(LogPath);
             Assert.Same(log, FileLog.Shared);
             FileLog.Shared.Info("via shared");
-            Assert.Contains("via shared", File.ReadAllText(LogPath), StringComparison.Ordinal);
+
+            // While the shared log points here, code under test in other classes running in parallel may append to the
+            // file, so it is read without blocking writers (File.ReadAllText fails with "used by another process").
+            using var stream = new FileStream(LogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            Assert.Contains("via shared", reader.ReadToEnd(), StringComparison.Ordinal);
         }
         finally
         {
