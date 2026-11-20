@@ -14,7 +14,7 @@
     <Authors>Christoph Fetz</Authors>
     <Copyright>Copyright (c) 2026 Christoph Fetz, MIT License</Copyright>
     <!-- Version of the program (release tag is v + this). The workflow stops if the tag and this value differ. -->
-    <Version>0.3.1</Version>
+    <Version>0.4.0</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
