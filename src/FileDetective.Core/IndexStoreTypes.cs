@@ -32,9 +32,12 @@ public sealed record RootInfo(
     int AttemptsToday,
     int RootEntryId);
 
-/// <summary>A child of a folder as the index currently knows it (input of the scanner's comparison, PLAN.md 7.2).</summary>
+/// <summary>
+/// A child of a folder as the index currently knows it (input of the scanner's comparison, PLAN.md 7.2).
+/// <see cref="VerifiedTicks"/> (stage 14, PLAN.md 11.5) is the folder date of <c>dir_verified</c>, null if there is none.
+/// </summary>
 public readonly record struct KnownChild(
-    int Id, string Name, bool IsDirectory, long Size, long MTimeUnixSeconds, FileAttributes Attributes);
+    int Id, string Name, bool IsDirectory, long Size, long MTimeUnixSeconds, FileAttributes Attributes, long? VerifiedTicks = null);
 
 /// <summary>One stored entry (stage 3 addition, used to start a subtree scan at a known folder).</summary>
 public sealed record StoredEntry(
@@ -99,8 +102,44 @@ public sealed class ChangeBatch
     /// <summary>Entries that are removed together with all their descendants.</summary>
     public List<int> DeleteSubtrees { get; } = [];
 
-    public int Count => Inserts.Count + Updates.Count + DeleteSubtrees.Count;
+    /// <summary>
+    /// Stage 14: folders without subfolders whose listing was compared completely, with the folder date (UTC ticks) the
+    /// listing of their parent showed. Written to <c>dir_verified</c> after the other changes.
+    /// </summary>
+    public List<FolderVerification> Verified { get; } = [];
+
+    /// <summary>Stage 14: folders whose row in <c>dir_verified</c> is removed (they have subfolders now).</summary>
+    public List<int> Unverified { get; } = [];
+
+    public int Count => Inserts.Count + Updates.Count + DeleteSubtrees.Count + Verified.Count + Unverified.Count;
 }
+
+/// <summary>A row for <c>dir_verified</c> (stage 14, PLAN.md 11.5).</summary>
+public readonly record struct FolderVerification(int Id, long MTimeTicks);
+
+/// <summary>
+/// The quick-scan state of a location (stage 14, PLAN.md 11.5, table <c>root_scan</c>): the switch (null = default of
+/// its kind), the last complete full scan with the fingerprint of its exclusion rules, and the saved stand of an
+/// interrupted scan, if there is one.
+/// </summary>
+public sealed record RootScanInfo(
+    byte RootId,
+    bool? QuickEnabled,
+    long? LastFullScanUtc,
+    string? FullScanRules,
+    ScanResumeInfo? Resume)
+{
+    /// <summary>Without a choice of the user: on for network locations, off for local and removable ones.</summary>
+    public static bool QuickDefault(RootKind kind) => kind == RootKind.Network;
+
+    public bool QuickFor(RootKind kind) => QuickEnabled ?? QuickDefault(kind);
+}
+
+/// <summary>A saved stand of an interrupted scan: when it began and was saved, its mode, its rules and the open folders.</summary>
+public sealed record ScanResumeInfo(long StartedUtc, long SavedUtc, bool Quick, string Rules, int OpenFolders);
+
+/// <summary>One open folder of a saved stand.</summary>
+public readonly record struct ResumeFolder(int EntryId, string Path);
 
 /// <summary>Result of <see cref="IndexStore.Apply"/>; <see cref="Deleted"/> counts all removed entries including descendants.</summary>
 public readonly record struct ApplyResult(int Inserted, int Updated, int Deleted);

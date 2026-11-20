@@ -60,6 +60,9 @@
   <data name="Status_Complete" xml:space="preserve"><value>Up to date</value></data>
   <data name="Status_CompleteErrors" xml:space="preserve"><value>Done, {0} folders not readable</value></data>
   <data name="Status_Aborted" xml:space="preserve"><value>Interrupted</value></data>
+  <data name="Status_Resumable" xml:space="preserve"><value>Interrupted, continues with {0:N0} open folders</value></data>
+  <data name="Location_QuickScan" xml:space="preserve"><value>Quick scan</value></data>
+  <data name="Location_QuickScanHint" xml:space="preserve"><value>Automatic updates skip folders without subfolders whose date has not changed. A full update runs at least every few days and on Update now.</value></data>
   <data name="Status_Never" xml:space="preserve"><value>Not scanned yet</value></data>
   <data name="Updated_Today" xml:space="preserve"><value>today {0:t}</value></data>
   <data name="Button_Browse" xml:space="preserve"><value>Browse…</value></data>
@@ -107,6 +110,8 @@ They are replaced by {0}. Continue?</value></data>
   <data name="Excl_Intro" xml:space="preserve"><value>Excluded folders and files are not added to the directory. Changes apply from the next update. One entry per line.</value></data>
   <data name="Excl_Folders" xml:space="preserve"><value>Folder names (anywhere)</value></data>
   <data name="Excl_FoldersHint" xml:space="preserve"><value>A folder with this name is skipped wherever it is.</value></data>
+  <data name="Excl_NetworkFolders" xml:space="preserve"><value>Folder names (network drives only)</value></data>
+  <data name="Excl_NetworkFoldersHint" xml:space="preserve"><value>Skipped only on network locations, e.g. build output (bin, obj) on a shared project drive.</value></data>
   <data name="Excl_Paths" xml:space="preserve"><value>Full paths</value></data>
   <data name="Excl_PathsHint" xml:space="preserve"><value>Environment variables like %WINDIR% and * inside a path part are allowed, e.g. C:\Users\*\AppData.</value></data>
   <data name="Excl_Files" xml:space="preserve"><value>File names</value></data>

@@ -230,9 +230,16 @@ public class ScannerFileSystemTests : IDisposable
 
         Assert.Equal(ScanAssert.TotalEntries(_f), _f.Index.Count);
 
+        // Stage 14: the next scan continues the saved stand instead of starting from the location.
         var full = new Scanner(_f.Store, FileSystemDirectoryLister.Instance, rules);
-        Assert.Equal(ScanOutcome.Complete, full.ScanRoot(root.Id).Outcome);
-        ScanAssert.TreeEquals(_f, root.Id, expected);
+        var second = full.ScanRoot(root.Id);
+        Assert.Equal(ScanOutcome.Complete, second.Outcome);
+        Assert.True(second.ResumedFolders > 0);
+
+        // Walked again: NTFS may show a newer folder date in a later listing of the parent (the date in the parent's
+        // entry is updated lazily after the files were written), so the earlier walk can be a little behind.
+        ScanAssert.TreeEquals(_f, root.Id, ScanAssert.WalkFileSystem(RootPath, rules));
+        Assert.Null(_f.Store.GetRootScanInfo(root.Id).Resume);
     }
 
     [Fact]

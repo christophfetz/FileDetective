@@ -128,12 +128,16 @@ public partial class SettingsWindow : Window
         AddButton.Content = Strings.Get("Button_Add");
         UpdateButton.Content = Strings.Get("Button_UpdateNow");
         RemoveButton.Content = Strings.Get("Button_Remove");
+        QuickScanBox.Content = Strings.Get("Location_QuickScan");
+        QuickScanBox.ToolTip = Strings.Get("Location_QuickScanHint");
         LocationsHint.Text = Strings.Get("Hint_Network");
 
         ExclusionsHeading.Text = Strings.Get("Section_Exclusions");
         ExclusionsIntro.Text = Strings.Get("Excl_Intro");
         FoldersLabel.Text = Strings.Get("Excl_Folders");
         FoldersHint.Text = Strings.Get("Excl_FoldersHint");
+        NetworkFoldersLabel.Text = Strings.Get("Excl_NetworkFolders");
+        NetworkFoldersHint.Text = Strings.Get("Excl_NetworkFoldersHint");
         PathsLabel.Text = Strings.Get("Excl_Paths");
         PathsHint.Text = Strings.Get("Excl_PathsHint");
         FilesLabel.Text = Strings.Get("Excl_Files");
@@ -215,6 +219,7 @@ public partial class SettingsWindow : Window
         _loadingControls = true;
         var s = _services.Settings.Current;
         FoldersBox.Text = string.Join(Environment.NewLine, s.ExcludedFolderNames);
+        NetworkFoldersBox.Text = string.Join(Environment.NewLine, s.ExcludedNetworkFolderNames);
         PathsBox.Text = string.Join(Environment.NewLine, s.ExcludedPaths);
         FilesBox.Text = string.Join(Environment.NewLine, s.ExcludedFileNames);
         HotkeyBox.Show(s.HotkeyValue);
@@ -270,7 +275,28 @@ public partial class SettingsWindow : Window
             }
         };
         RemoveButton.Click += async (_, _) => await RemoveSelectedAsync();
+        QuickScanBox.Click += (_, _) => SetQuickScan();
         LocationList.SelectionChanged += (_, _) => UpdateLocationButtons();
+    }
+
+    /// <summary>Stage 14 (PLAN.md 11.5): stores the quick-scan switch of the selected location; applies from its next scan.</summary>
+    private void SetQuickScan()
+    {
+        if (LocationList.SelectedItem is not LocationItem item || _services.Index.Store is not { } store)
+        {
+            return;
+        }
+
+        try
+        {
+            store.SetQuickScanEnabled(item.Id, QuickScanBox.IsChecked == true);
+        }
+        catch (Exception ex)
+        {
+            FileLog.Shared.Error("Saving the quick-scan switch failed", ex);
+        }
+
+        QueueRefresh();
     }
 
     private void UpdateLocationButtons()
@@ -278,6 +304,9 @@ public partial class SettingsWindow : Window
         bool has = LocationList.SelectedItem is LocationItem;
         UpdateButton.IsEnabled = has && !_busy;
         RemoveButton.IsEnabled = has && !_busy;
+        var selectedItem = LocationList.SelectedItem as LocationItem;
+        QuickScanBox.IsEnabled = selectedItem?.ScanInfo is not null && !_busy;
+        QuickScanBox.IsChecked = selectedItem?.ScanInfo is { } info && info.QuickFor(selectedItem.Root.Kind);
         AddButton.IsEnabled = !_busy && _services.Index.IsLoaded;
         BrowseButton.IsEnabled = !_busy && _services.Index.IsLoaded;
     }
@@ -323,12 +352,27 @@ public partial class SettingsWindow : Window
                     FileLog.Shared.Error("Counting the entries failed", ex);
                 }
 
+                var scanInfos = new Dictionary<byte, RootScanInfo>();
+                try
+                {
+                    foreach (var root in roots)
+                    {
+                        scanInfos[root.Id] = store.GetRootScanInfo(root.Id);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    FileLog.Shared.Error("Reading the quick-scan state failed", ex);
+                }
+
                 byte? selected = (LocationList.SelectedItem as LocationItem)?.Id;
                 _items.Clear();
                 foreach (var root in roots)
                 {
                     int? count = counts is null ? null : counts.GetValueOrDefault(root.Id);
-                    _items.Add(new LocationItem(root, index.GetScanState(root.Id), count, index.IsLocationUnreachable(root.Id)));
+                    _items.Add(new LocationItem(
+                        root, index.GetScanState(root.Id), count, index.IsLocationUnreachable(root.Id),
+                        scanInfos.GetValueOrDefault(root.Id)));
                 }
 
                 if (selected is { } id && _items.FirstOrDefault(i => i.Id == id) is { } again)
@@ -494,7 +538,7 @@ public partial class SettingsWindow : Window
     private static List<string> Lines(string text)
         => [.. text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
-    /// <summary>Saves the three lists if they differ from the saved ones. Takes effect at the next scan.</summary>
+    /// <summary>Saves the lists if they differ from the saved ones. Takes effect at the next scan.</summary>
     private void CommitExclusions()
     {
         if (_loadingControls)
@@ -503,10 +547,13 @@ public partial class SettingsWindow : Window
         }
 
         var folders = Lines(FoldersBox.Text);
+        var networkFolders = Lines(NetworkFoldersBox.Text);
         var paths = Lines(PathsBox.Text);
         var files = Lines(FilesBox.Text);
         var current = _services.Settings.Current;
-        if (folders.SequenceEqual(current.ExcludedFolderNames) && paths.SequenceEqual(current.ExcludedPaths)
+        if (folders.SequenceEqual(current.ExcludedFolderNames)
+            && networkFolders.SequenceEqual(current.ExcludedNetworkFolderNames)
+            && paths.SequenceEqual(current.ExcludedPaths)
             && files.SequenceEqual(current.ExcludedFileNames))
         {
             return;
@@ -517,6 +564,7 @@ public partial class SettingsWindow : Window
             _services.Settings.Update(s => s with
             {
                 ExcludedFolderNames = folders,
+                ExcludedNetworkFolderNames = networkFolders,
                 ExcludedPaths = paths,
                 ExcludedFileNames = files,
             });

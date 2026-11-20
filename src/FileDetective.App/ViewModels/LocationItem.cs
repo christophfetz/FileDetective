@@ -7,16 +7,19 @@ namespace FileDetective.App.ViewModels;
 /// <summary>One line of the location list in the settings: a location with state, last update and entry count.</summary>
 internal sealed class LocationItem
 {
-    public LocationItem(RootInfo root, QueuedScanState scanState, int? entryCount, bool unreachable)
+    public LocationItem(RootInfo root, QueuedScanState scanState, int? entryCount, bool unreachable, RootScanInfo? scanInfo = null)
     {
         Id = root.Id;
         Root = root;
         Path = root.Path;
         UncPath = root.UncPath ?? string.Empty;
         KindText = LocationUi.KindText(root.Kind);
+        ScanInfo = scanInfo;
         StatusText = scanState == QueuedScanState.Idle && unreachable
             ? Strings.Get("Status_NotConnected")
-            : StatusOf(root, scanState);
+            : scanState == QueuedScanState.Idle && scanInfo?.Resume is { } resume
+                ? LocationUi.Format("Status_Resumable", resume.OpenFolders) // stage 14: a saved stand will be continued
+                : StatusOf(root, scanState);
         UpdatedText = UpdatedOf(root);
         EntriesText = entryCount is { } n ? n.ToString("N0", CultureInfo.CurrentCulture) : "…";
     }
@@ -24,6 +27,9 @@ internal sealed class LocationItem
     public byte Id { get; }
 
     public RootInfo Root { get; }
+
+    /// <summary>Stage 14: quick-scan switch and saved stand of the location (null if not read).</summary>
+    public RootScanInfo? ScanInfo { get; }
 
     public string Path { get; }
 

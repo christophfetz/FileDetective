@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0
+
+- On network drives the folders `bin` and `obj` (build output) are skipped by default. They have their own list "Folder names (network drives only)" under Exclusions (`excludedNetworkFolderNames` in `settings.json`); local locations and removable drives are not affected. After the update the first scan of a network drive is a full one and removes the entries below such folders.
+- Stage 14 (PLAN.md 11.5, in progress until the check period on a large share is done): faster updates of large shares. Measured before: `L:\CMS` with 3.95 million folders and 30.2 million entries took 18–19 h per daily scan, although only 0.1–0.2 % of the entries changed; an interrupted scan started again from the location.
+- Continuing: a scan of a whole location saves its open folders at most once a minute (after writing the pending batch) and when it is cancelled, in the new table `scan_resume`. The next scan of the location continues there instead of starting from the location; resumed folders are always compared, so continuing from an older stand only compares some folders twice. A stand is dropped after 7 days, when the exclusion rules changed, when the location is removed and when the directory is rebuilt or renumbered. The location list shows "Interrupted, continues with N open folders".
+- Quick scan: a folder without subfolders gets the folder date its parent's listing showed (UTC ticks) in the new table `dir_verified` once its own listing was compared completely and the date is at least an hour old. An automatic scan of a location with "Quick scan" switched on (default: on for network locations, off otherwise; checkbox below the location list) does not list such a folder while its date is unchanged, and makes no pause for it. "Update now", the first scan, a scan after a change of the exclusion rules and at least every 7 days (`fullScanIntervalDays` in `settings.json`) are full scans. Known limit: sizes and dates of files in skipped folders are refreshed by the next full scan only.
+- Check mode (`quickScanShadow` in `settings.json`, on by default in this stage): a quick scan decides as usual but lists every folder anyway and logs every folder it would have skipped although names in it changed. The scan log line reports skipped folders, the check result and resumed folders.
+- Giving way: a running automatic scan of a share makes way for a local scan and for "Update now" of another location; it saves its stand and continues afterwards (new trigger `Continue`, not counted as an automatic attempt).
+- `ExcludeRules.Fingerprint`: a short hash of the rules, so stands and full-scan marks made under other rules are not used.
+- Tests: 37 new (`QuickScanTests`, `NetworkExclusionTests`); `ScannerFileSystemTests.CancelMidScan…` now checks that the second scan continues the stand. 862 tests in total.
+
 ## 0.3.1
 
 - Fix (issue 1): in the search bar a click on the file name did not select the row, and double click and right click threw `InvalidOperationException` ("'Run' is not a Visual"). `ItemUnder` now climbs the logical tree for non-visuals such as `Run`; a left click selects the row under the pointer (the rows are not focusable, so the list box did not select them itself).

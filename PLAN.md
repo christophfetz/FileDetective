@@ -274,6 +274,8 @@ Der `Scanner` läuft mit einem eigenen Stapel (keine Rekursion) durch den Baum. 
 
 Änderungen gehen in Stapeln von 5.000 Zeilen je Transaktion an den `IndexStore`. Beim ersten Durchlauf eines Ortes entfällt Schritt 3, weil nichts bekannt ist.
 
+Ab Etappe 14 (11.5): Ein unterbrochener Durchlauf wird fortgesetzt statt neu begonnen, und bei Orten mit Schnellabgleich werden unveränderte Ordner ohne Unterordner nicht aufgelistet.
+
 Ist der Ort selbst nicht erreichbar, bricht der Durchlauf sofort ab und ändert nichts. Jeder Durchlauf ist jederzeit abbrechbar; bereits geschriebene Stapel bleiben gültig.
 
 Es läuft immer nur ein Durchlauf gleichzeitig. Lokale Orte kommen in der Warteschlange vor Freigaben.
@@ -286,6 +288,7 @@ Es läuft immer nur ein Durchlauf gleichzeitig. Lokale Orte kommen in der Wartes
 |---|---|
 | Ordnername, überall | `node_modules`, `.git`, `.svn`, `.hg`, `.vs`, `.idea`, `__pycache__`, `$RECYCLE.BIN`, `System Volume Information` |
 | Voller Pfad, mit Umgebungsvariablen und `*` je Pfadteil | `%WINDIR%`, `%ProgramFiles%`, `%ProgramFiles(x86)%`, `%ProgramData%`, `C:\Users\*\AppData` |
+| Ordnername, nur auf Netzlaufwerken (nachgetragen am 2026-11-20 auf Wunsch des Nutzers) | `bin`, `obj` |
 | Dateiname, mit `*` | `~$*`, `Thumbs.db`, `desktop.ini`, `*.tmp` |
 | Attribut | Einträge mit dem Attribut `System` |
 
@@ -310,7 +313,7 @@ Versteckte Dateien ohne Systemattribut werden aufgenommen.
 | Lokal | 60 Sekunden nach jedem Programmstart (holt nach, was bei beendetem Programm geschah); danach laufend über `LocalWatcher`; auf Klick |
 | Freigabe, Wechseldatenträger | wenn der letzte vollständige Durchlauf an einem früheren Kalendertag war und der Ort erreichbar ist; geprüft 2 Minuten nach Start, danach stündlich und bei Netzwerkwechsel; auf Klick |
 
-Ein abgebrochener Freigaben-Durchlauf wird bei der nächsten Prüfung wiederholt, höchstens dreimal je Kalendertag (`attempts_today`).
+Ein abgebrochener Freigaben-Durchlauf wird bei der nächsten Prüfung wiederholt, höchstens dreimal je Kalendertag (`attempts_today`). Ab Etappe 14 setzt die Wiederholung beim gesicherten Stand fort (11.5).
 
 ### 7.6 Laufende Änderungen auf lokalen Orten
 
@@ -720,6 +723,132 @@ Abnahme durch Tests:
 - In der Suchleiste schließt sich die Leiste vor dem Dialog „Öffnen mit“, damit die gewählte App vorn erscheint. Im Notizfeld schreibt Enter eine neue Zeile, Esc verlässt das Feld (und speichert), Strg+C kopiert markierten Text.
 - Notizen werden im Verlauf nicht hervorgehoben; die Textstelle der Suchleiste zeigt Notiz und Text zusammen mit markierten Begriffen.
 
+### 11.5 Etappe 14 – Schneller Abgleich großer Freigaben (hoch)
+
+Mit dem Nutzer festgelegt am 2026-11-20 nach Auswertung des Protokolls. Keine neuen Pakete. Die Leitplanken aus Abschnitt 2 gelten unverändert: Fortsetzen und Überspringen erzeugen keinen zusätzlichen Durchlauf und keinen zusätzlichen Zugriff auf die Freigabe.
+
+**Anlass** (gemessen, Log 17.–19.11.2026)
+
+`L:\CMS`: 3,95 Mio. Ordner, 30,2 Mio. Einträge. Jeder tägliche Durchlauf dauert 18–19 h (davon 3,5–4,6 h Pausen), obwohl sich pro Tag nur 0,1–0,2 % der Einträge ändern. Der Durchlauf beginnt um etwa 00:22 und blockiert bis zum Abend die Warteschlange für alle anderen Orte. Ein Abbruch (Programmende, Neustart, Absturz) verwirft den Fortschritt, der nächste Versuch beginnt wieder beim Wurzelordner (so am 20.11.). 2,16 Mio. Ordner (55 %) haben keine Unterordner.
+
+**Umfang**
+
+#### 14.1 Fortsetzen nach Abbruch (Teil A)
+
+1. Neue Tabelle, wie `hashes` mit `CREATE TABLE IF NOT EXISTS` (Schemaversion bleibt 1):
+   ```sql
+   CREATE TABLE IF NOT EXISTS scan_resume(
+     root_id INTEGER NOT NULL,
+     seq INTEGER NOT NULL,            -- Reihenfolge im Stapel
+     entry_id INTEGER NOT NULL,
+     path TEXT NOT NULL,
+     PRIMARY KEY(root_id, seq));
+   ```
+   Dazu je Ort in der Tabelle `root_scan`: Startzeit des unterbrochenen Durchlaufs, Zeit der Sicherung, Art (schnell/voll, siehe 14.2), Fingerabdruck der Ausschlussregeln.
+2. Der `Scanner` sichert bei `ScanRoot` höchstens einmal pro Minute einen Stand, und zwar nur zwischen zwei Verzeichnissen: zuerst den offenen Stapel schreiben (`Flush`), danach den Stapel in `scan_resume` ersetzen. Bei Abbruch wird zusätzlich ein letzter Stand gesichert.
+3. Beim Fortsetzen werden alle gesicherten Ordner **mit Abgleich** bearbeitet (`IsNew = false`), auch wenn sie im ersten Teil neu waren. Damit ist das Fortsetzen wiederholbar: Ein Ordner, der nach dem letzten Stand schon bearbeitet war, wird ein zweites Mal verglichen und ändert dabei nichts. Ein gesicherter Ordner, den es in der DB nicht mehr gibt, wird übersprungen.
+4. Wenn der Stapel leer ist, wird `scan_resume` gelöscht und der Ort bekommt wie bisher Complete/CompleteWithErrors. `last_scan_started_utc` ist wie bisher der Start des jeweiligen Versuchs (daran hängt `attempts_today`); der Start des ursprünglichen Durchlaufs steht in `root_scan.resume_started_utc`.
+5. Ein Stand wird verworfen (also neu begonnen), wenn
+   - die Ausschlussregeln sich geändert haben (Fingerabdruck),
+   - der Stand älter als 7 Tage ist,
+   - der Ort entfernt wird (`RemoveRoot`) oder das Verzeichnis neu aufgebaut bzw. neu nummeriert wird (`ResetAllEntries`, `DirectoryRenumbering`, `DirectoryRebuilder`), denn die Eintragsnummern stimmen dann nicht mehr.
+6. Zeitplan (7.5): Hat ein fälliger Ort einen gültigen Stand, setzt der automatische Durchlauf fort statt neu zu beginnen. Die Grenze von 3 Versuchen pro Tag bleibt. Ein fortgesetzter Durchlauf gilt als **derselbe** Durchlauf; er wird auch über Mitternacht fortgesetzt (Leitplanke 4 bleibt eingehalten: kein zusätzlicher Durchlauf, nur das Fertigstellen des begonnenen).
+7. Das Protokoll vermerkt „resumed from N folders“. Die Statistik zählt nur den fortgesetzten Teil.
+
+#### 14.2 Unveränderte Ordner ohne Unterordner überspringen (Teil B)
+
+Grundlage: Wird in einem Ordner etwas angelegt, gelöscht oder umbenannt, setzt NTFS sein Änderungsdatum neu, und das Auflisten des Elternordners liefert dieses Datum mit. Änderungen tiefer unten ändern das Datum oben **nicht**. Deshalb lassen sich nur Ordner ohne Unterordner sicher überspringen.
+
+1. Neue Spalte über eine eigene Tabelle (kein `ALTER` an `entries`, damit Neuaufbau und Neunummerierung einfach bleiben):
+   ```sql
+   CREATE TABLE IF NOT EXISTS dir_verified(
+     entry_id INTEGER PRIMARY KEY,
+     mtime_ticks INTEGER NOT NULL);   -- Ordnerdatum (UTC-Ticks) zum Zeitpunkt des letzten vollständigen Auflistens
+   ```
+   mit Lösch-Trigger wie `hashes`. In `RawEntry.LastWriteUtc` steht das Datum in voller Auflösung zur Verfügung; die Sekunden in `entries.mtime` reichen dafür nicht.
+2. Geschrieben wird `dir_verified` nur, nachdem **der Ordner selbst** vollständig aufgelistet und abgeglichen wurde, und zwar mit dem Datum, das das Auflisten des Elternordners in **diesem** Durchlauf geliefert hat. Liegt dieses Datum weniger als 1 Stunde vor dem Zeitpunkt des Auflistens, wird nichts geschrieben (grobe Zeitstempel von FAT oder NAS und eine vorgehende Serveruhr könnten sonst eine Änderung verdecken).
+3. Ein Unterordner wird **nicht aufgelistet**, wenn alle Punkte zutreffen:
+   - der Ort hat „Schnellabgleich“ an (14.3) und der laufende Durchlauf ist ein schneller,
+   - der Ordner ist bekannt (nicht neu in diesem Durchlauf),
+   - er hat laut DB keine Unterordner (eine Abfrage `EXISTS … parent_id = ? AND is_dir = 1`),
+   - sein Datum aus dem aktuellen Auflisten des Elternordners ist gleich `dir_verified.mtime_ticks`.
+   Ein übersprungener Ordner bekommt keine Pause (es gab keinen Zugriff), seine Einträge bleiben unverändert.
+4. Was der Schnellabgleich nicht sieht: geänderte Größe oder geändertes Datum von Dateien in übersprungenen Ordnern. Die Namenssuche betrifft das nicht. Rangfolge („zuletzt geändert“), Speicherplatz und mögliche Dubletten können veraltete Werte zeigen. Deshalb:
+   - Mindestens alle 7 Tage (Einstellung je Ort) ist der automatische Durchlauf ein **voller**, ebenso jedes „Jetzt aktualisieren“.
+   - Haben sich die Ausschlussregeln seit dem letzten vollen Durchlauf geändert, ist der nächste Durchlauf ein voller.
+   - Je Ort in `root_scan`: `last_full_utc` und `full_rules` (Fingerabdruck der Ausschlüsse des vollen Durchlaufs).
+5. Statistik und Protokoll bekommen „skipped unchanged N“.
+
+#### 14.3 Einstellung und Oberfläche
+
+- Je Ort ein Haken „Schnellabgleich (unveränderte Ordner überspringen)“. Standard: an für Netzwerk, aus für Wechseldatenträger (FAT/exFAT pflegt Ordnerdaten nicht zuverlässig), aus für lokale Orte (die hält der Watcher aktuell).
+- „Voller Abgleich alle … Tage“: Einstellung `fullScanIntervalDays` in `settings.json` (1–90, Standard 7), für alle Orte gemeinsam, ohne Feld im Fenster.
+- Statuszeile: „wird fortgesetzt (… Ordner offen)“ bei einem gültigen Stand.
+- Texte in `Strings.resx` und `Strings.de.resx`.
+
+#### 14.4 Prüfmodus vor dem Einschalten (Pflicht)
+
+Ob Ordnerdaten auf dem echten Server (Windows-Freigabe, NAS, DFS) zuverlässig nachgezogen werden, lässt sich nur dort feststellen. NTFS liefert beim Auflisten die Daten aus dem Eintrag im Elternordner; ob diese bei jeder Änderung sofort aktualisiert werden, ist nicht sicher belegt.
+
+- Versteckte Einstellung `quickScanShadow` (Standard an in dieser Etappe): Der Durchlauf entscheidet wie in 14.2.3, listet den Ordner aber **trotzdem** auf und vergleicht. Jeder Ordner, der übersprungen worden wäre, sich beim Abgleich aber als geändert herausstellt, wird mit Pfad protokolliert und gezählt („shadow misses“).
+- Abnahme für das Einschalten: über mindestens 3 Tage auf `L:\CMS` 0 shadow misses bei Namen (eingefügt/gelöscht/umbenannt). Treffer nur bei Größe/Datum von Dateien sind erwartet und werden getrennt gezählt.
+
+#### 14.5 Vorrang vor laufendem Freigaben-Durchlauf (optional, Teil C)
+
+Nur sinnvoll mit 14.1: Kommt ein lokaler oder manueller Auftrag, während ein automatischer Freigaben-Durchlauf läuft, wird dieser zwischen zwei Verzeichnissen abgebrochen (Stand wird gesichert), der neue Auftrag läuft, danach setzt die Freigabe fort. Zählt nicht als weiterer Versuch.
+
+**Umsetzung und Entscheidungen** (Etappe 14, 2026-11-20)
+
+- Tabellen statt `meta`: `dir_verified(entry_id, mtime)` mit Trigger `tr_entries_delete_dir_verified`, `scan_resume(root_id, seq, entry_id, path)` und `root_scan(root_id, quick_enabled, last_full_utc, full_rules, resume_*)`, alle mit `CREATE … IF NOT EXISTS` (Schemaversion bleibt 1). Fehlt der Trigger (Neunummerierung durch ein älteres Programm oder durch `DirectoryRenumbering`, das `entries` neu anlegt), werden `dir_verified` und alle Stände geleert, nie umgeschlüsselt. „Verzeichnis neu aufbauen“ leert zusätzlich die Marken des vollen Durchlaufs; der Haken je Ort bleibt.
+- `dir_verified` hat nur Zeilen für Ordner ohne Unterordner. Ein Ordner, der beim Auflisten Unterordner zeigt, verliert seine Zeile. Damit braucht die Entscheidung „überspringen“ keine eigene Abfrage: `GetKnownChildren` liefert das Datum mit (`KnownChild.VerifiedTicks`).
+- Die Datumsprüfung schreibt in denselben Stapel wie die Einträge (`ChangeBatch.Verified`/`Unverified`), also in derselben Transaktion.
+- Fortgesetzte Ordner werden nie verifiziert (ihr Datum aus dem Elternordner ist unbekannt); sie werden aber immer aufgelistet.
+- Fortsetzen: Bei Abbruch während der Pause nach einem Auflisten kommt der Ordner zurück auf den Stapel. Ein unerwarteter Fehler (z. B. Datenbank) lässt den letzten Stand stehen. Ein fortgesetzter Durchlauf liest zuerst den Ort selbst (nur Erreichbarkeit); ist er nicht erreichbar, bleibt der Stand unverändert.
+- Ein voller Durchlauf, der einen schnellen Stand fortsetzt, gilt nicht als voll (keine Marke).
+- Schnell nur für automatische Aufträge (`Scheduled`, `Continue`, `Startup`, `Overflow`); „Jetzt aktualisieren“ und der erste Durchlauf eines Ortes sind voll. „Jetzt aktualisieren“ setzt einen vorhandenen Stand fort.
+- Vorrang: Neuer Auslöser `ScanTrigger.Continue`. Ein automatischer Durchlauf einer Freigabe oder eines Wechseldatenträgers weicht einem lokalen Auftrag und einem manuellen Auftrag für einen anderen Ort; er wird abgebrochen (Stand gesichert) und am Ende seiner Gruppe wieder eingereiht. Wird der Ort in der Zwischenzeit abgebrochen oder entfernt, wird er nicht wieder eingereiht.
+- Prüfmodus: `quickScanShadow` in `settings.json`, Standard an. Fehlentscheidungen stehen mit Pfad im Protokoll (höchstens 100 je Durchlauf), die Zahl in der Zusammenfassung des Durchlaufs.
+- Oberfläche: Haken „Schnellabgleich“ unter der Ortsliste für den gewählten Ort; Status „Unterbrochen, setzt mit N offenen Ordnern fort“.
+- Zusätzlich auf Wunsch des Nutzers (2026-11-20): `bin` und `obj` werden auf Netzlaufwerken standardmäßig übersprungen (7.3). Eigene Liste `excludedNetworkFolderNames` mit eigenem Feld unter „Ausschlüsse“; lokale Orte und Wechseldatenträger sind nicht betroffen. Weil sich damit der Fingerabdruck der Ausschlüsse eines Netzlaufwerks ändert, ist der erste Durchlauf nach dem Update dort ein voller, und ein gesicherter Stand wird verworfen. Ausgeliefert mit Version 0.4.0, während die Prüfzeit noch läuft.
+- Beobachtung beim Testen auf NTFS: Kurz nach dem Schreiben von Dateien zeigte ein späteres Auflisten des Elternordners ein um 1 s neueres Ordnerdatum als ein früheres. Das Ordnerdatum im Auflisten kann also kurz hinterherhinken. Deshalb die Stunde Abstand und der Prüfmodus vor dem Einschalten.
+
+**Betroffene Stellen**
+
+| Datei | Änderung |
+|---|---|
+| `Core/IndexDatabase.cs` | `scan_resume`, `dir_verified` + Trigger in `EnsureExtensions` |
+| `Core/IndexStore.cs` | Stand lesen/schreiben/löschen; `HasSubdirectories`; `dir_verified` lesen/schreiben; Aufräumen in `RemoveRoot`, `ResetAllEntries` |
+| `Core/DirectoryRenumbering.cs`, `DirectoryRebuilder.cs` | Stände verwerfen, `dir_verified` mitnummerieren oder leeren |
+| `Core/Scanner.cs` | Sichern, Fortsetzen, Überspringen, Prüfmodus, neue Statistikfelder |
+| `Core/RefreshScheduler.cs`, `ScanExecutor.cs` | fortsetzen statt neu; schnell/voll entscheiden |
+| `Core/ScanQueue.cs` | (nur 14.5) Vorrang |
+| `Core/AppSettings.cs`, `SettingsService.cs` | Einstellungen je Ort, Fingerabdruck der Ausschlüsse |
+| `App/SettingsWindow.xaml(.cs)`, `ViewModels/LocationItem.cs`, `Strings*.resx` | Haken, Feld, Statustext |
+
+**Tests (neu, in `tests/`)**
+
+- Fortsetzen: Abbruch nach N Ordnern → Fortsetzen → Ergebnis gleich wie ein Durchlauf ohne Abbruch (auch mit Änderungen dazwischen, mit neuen Ordnern im ersten Teil, mit einem Absturz zwischen `Flush` und Sichern).
+- Verwerfen bei geänderten Ausschlüssen, Alter > 7 Tage, `RemoveRoot`, Neunummerierung.
+- Überspringen nur bei: bekannt, ohne Unterordner, gleiches Datum, Abstand ≥ 2 s; nicht bei neuem Unterordner, nicht nach fehlgeschlagenem Auflisten (dann bleibt `dir_verified` alt).
+- Voller Durchlauf nach 7 Tagen und bei „Jetzt aktualisieren“.
+- Prüfmodus zählt Fehlentscheidungen.
+- Leitplanken: fehlgeschlagenes Auflisten löscht nichts, keine Datei wird geöffnet, ein Thread.
+
+**Abnahme**
+
+1. Alle Tests grün, bestehende 825 Tests unverändert grün.
+2. Prüfmodus 3 Tage auf `L:\CMS` ohne Fehlentscheidung bei Namen.
+3. Gemessen und in `CHANGELOG.md` festgehalten: Dauer eines schnellen und eines vollen Durchlaufs von `L:\CMS`, Zahl der übersprungenen Ordner; ein Durchlauf, der durch Neustart unterbrochen wird, läuft danach weiter und wird fertig.
+
+**Entscheidungen** (vom Nutzer am 2026-11-20 freigegeben, wie vorgeschlagen)
+
+| Punkt | Entscheidung |
+|---|---|
+| Soll „Jetzt aktualisieren“ einen vorhandenen Stand fortsetzen oder neu beginnen? | fortsetzen; neu beginnen nur nach dem Ändern von Ausschlüssen |
+| Teil C (Vorrang) in dieser Etappe? | ja, ist mit A wenig Mehraufwand und löst das Blockieren der Warteschlange |
+| Abstand voller Durchläufe | 7 Tage |
+| Prüfmodus-Dauer | 3 Tage, danach Standard aus |
+
 ## 12. Stand
 
 - [x] Etappe 0 – Projektgerüst
@@ -737,6 +866,7 @@ Abnahme durch Tests:
 - [x] Etappe 11 – Bildtext
 - [x] Etappe 12 – Verlauf
 - [x] Etappe 13 – Öffnen mit und Bildnotizen
+- [ ] Etappe 14 – Schneller Abgleich großer Freigaben
 
 ## 13. Bewusst nicht enthalten
 

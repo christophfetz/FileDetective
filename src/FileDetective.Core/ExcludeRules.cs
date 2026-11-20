@@ -27,6 +27,12 @@ public sealed class ExcludeRules
         "node_modules", ".git", ".svn", ".hg", ".vs", ".idea", "__pycache__", "$RECYCLE.BIN", "System Volume Information",
     ];
 
+    /// <summary>
+    /// Default folder names skipped on network locations only (PLAN.md 7.3, added 2026-11-20 at the user's request): build
+    /// output of .NET projects, which made up 59 % of the folders of a large company share.
+    /// </summary>
+    public static readonly IReadOnlyList<string> DefaultNetworkFolderNames = ["bin", "obj"];
+
     /// <summary>Default full paths (PLAN.md 7.3).</summary>
     public static readonly IReadOnlyList<string> DefaultPaths =
     [
@@ -86,14 +92,54 @@ public sealed class ExcludeRules
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(fileNamePatterns);
         var expand = expandEnvironmentVariables ?? Environment.ExpandEnvironmentVariables;
+        var folderList = folderNames.ToList();
+        var pathList = paths.ToList();
+        var fileList = fileNamePatterns.ToList();
+        var includedList = (includedPaths ?? []).ToList();
 
         _folderNames = new HashSet<string>(
-            folderNames.Select(n => n?.Trim() ?? string.Empty).Where(n => n.Length > 0), StringComparer.OrdinalIgnoreCase);
-        _fileNamePatterns = [.. fileNamePatterns.Select(p => p?.Trim() ?? string.Empty).Where(p => p.Length > 0)];
-        _pathRules = [.. paths.Select(p => PathRule.TryCreate(p, expand)).OfType<PathRule>()];
+            folderList.Select(n => n?.Trim() ?? string.Empty).Where(n => n.Length > 0), StringComparer.OrdinalIgnoreCase);
+        _fileNamePatterns = [.. fileList.Select(p => p?.Trim() ?? string.Empty).Where(p => p.Length > 0)];
+        _pathRules = [.. pathList.Select(p => PathRule.TryCreate(p, expand)).OfType<PathRule>()];
         _pathRuleDepths = [.. _pathRules.Select(r => r.Parts.Length)];
         ExcludeSystem = excludeSystem;
-        BuildChains(includedPaths ?? [], expand);
+        BuildChains(includedList, expand);
+        Fingerprint = ComputeFingerprint(folderList, pathList, fileList, includedList, excludeSystem, expand);
+    }
+
+    /// <summary>
+    /// A short text that changes whenever the rules may decide differently (stage 14, PLAN.md 11.5): the three lists, the
+    /// System switch and the included paths, with environment variables expanded and case folded. A saved stand or a
+    /// quick scan made under other rules is not used.
+    /// </summary>
+    public string Fingerprint { get; }
+
+    private static string ComputeFingerprint(
+        List<string> folderNames, List<string> paths, List<string> fileNamePatterns, List<string> includedPaths,
+        bool excludeSystem, Func<string, string> expand)
+    {
+        static IEnumerable<string> Normalize(List<string> items, Func<string, string> map)
+            => items.Select(i => map(i?.Trim() ?? string.Empty).Trim().ToUpperInvariant())
+                .Where(i => i.Length > 0).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+
+        var text = new System.Text.StringBuilder();
+        foreach (var (tag, items) in new[]
+        {
+            ("F", Normalize(folderNames, static s => s)),
+            ("P", Normalize(paths, expand)),
+            ("N", Normalize(fileNamePatterns, static s => s)),
+            ("I", Normalize(includedPaths, expand)),
+        })
+        {
+            foreach (string item in items)
+            {
+                text.Append(tag).Append(':').Append(item).Append('\n');
+            }
+        }
+
+        text.Append("S:").Append(excludeSystem ? '1' : '0');
+        byte[] hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text.ToString()));
+        return Convert.ToHexString(hash, 0, 16);
     }
 
     /// <summary>Rules with the default lists of PLAN.md 7.3, including the Start menu folders.</summary>

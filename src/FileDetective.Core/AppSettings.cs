@@ -59,6 +59,10 @@ public sealed record AppSettings
     [JsonPropertyName("excludedFolderNames")]
     public IReadOnlyList<string> ExcludedFolderNames { get; init; } = ExcludeRules.DefaultFolderNames;
 
+    /// <summary>Folder names skipped only on network locations (default <c>bin</c>, <c>obj</c>).</summary>
+    [JsonPropertyName("excludedNetworkFolderNames")]
+    public IReadOnlyList<string> ExcludedNetworkFolderNames { get; init; } = ExcludeRules.DefaultNetworkFolderNames;
+
     [JsonPropertyName("excludedPaths")]
     public IReadOnlyList<string> ExcludedPaths { get; init; } = ExcludeRules.DefaultPaths;
 
@@ -114,6 +118,23 @@ public sealed record AppSettings
     [JsonPropertyName("historyHotkey")]
     public string HistoryHotkey { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Stage 14 (PLAN.md 11.5): check mode of the quick scan. While true, a quick scan lists every folder anyway and only
+    /// logs the folders it would have skipped wrongly. No field in the window; switched off in <c>settings.json</c> after
+    /// the check period.
+    /// </summary>
+    [JsonPropertyName("quickScanShadow")]
+    public bool QuickScanShadow { get; init; } = true;
+
+    /// <summary>Stage 14: days after which an automatic scan of a location with quick scan is a full one again (1–90).</summary>
+    [JsonPropertyName("fullScanIntervalDays")]
+    public int FullScanIntervalDays { get; init; } = FullScanIntervalDefault;
+
+    public const int FullScanIntervalDefault = 7;
+
+    [JsonIgnore]
+    public TimeSpan FullScanInterval => TimeSpan.FromDays(Math.Clamp(FullScanIntervalDays, 1, 90));
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; init; }
 
@@ -149,10 +170,11 @@ public sealed record AppSettings
     public static string PolitenessCode(NetworkPoliteness level)
         => level == NetworkPoliteness.VeryGentle ? PolitenessVeryGentle : PolitenessNormal;
 
-    /// <summary>The three exclusion lists reset to the defaults of PLAN.md 7.3.</summary>
+    /// <summary>The exclusion lists reset to the defaults of PLAN.md 7.3.</summary>
     public AppSettings WithDefaultExclusions() => this with
     {
         ExcludedFolderNames = ExcludeRules.DefaultFolderNames,
+        ExcludedNetworkFolderNames = ExcludeRules.DefaultNetworkFolderNames,
         ExcludedPaths = ExcludeRules.DefaultPaths,
         ExcludedFileNames = ExcludeRules.DefaultFileNames,
     };
@@ -162,9 +184,11 @@ public sealed record AppSettings
     /// With the image text on, its folders are always recorded like the Start menu folders (PLAN.md 7.3), so a folder
     /// below an excluded path (e.g. in <c>AppData</c>) still gets its images into the directory.
     /// </remarks>
-    public ExcludeRules CreateExcludeRules()
+    /// <param name="kind">Kind of the location scanned; network locations also skip <see cref="ExcludedNetworkFolderNames"/>.</param>
+    public ExcludeRules CreateExcludeRules(RootKind kind = RootKind.Local)
         => new(
-            ExcludedFolderNames, ExcludedPaths, ExcludedFileNames,
+            kind == RootKind.Network ? [.. ExcludedFolderNames, .. ExcludedNetworkFolderNames] : ExcludedFolderNames,
+            ExcludedPaths, ExcludedFileNames,
             includedPaths: OcrEnabled && OcrFolders is { Count: > 0 } folders
                 ? [.. ExcludeRules.AlwaysIncludedPaths, .. folders]
                 : ExcludeRules.AlwaysIncludedPaths);
@@ -181,9 +205,11 @@ public sealed record AppSettings
         Language = Language is LanguageGerman or LanguageEnglish ? Language : LanguageSystem,
         Politeness = Politeness == PolitenessVeryGentle ? PolitenessVeryGentle : PolitenessNormal,
         ExcludedFolderNames = Clean(ExcludedFolderNames, ExcludeRules.DefaultFolderNames),
+        ExcludedNetworkFolderNames = Clean(ExcludedNetworkFolderNames, ExcludeRules.DefaultNetworkFolderNames),
         ExcludedPaths = Clean(ExcludedPaths, ExcludeRules.DefaultPaths),
         ExcludedFileNames = Clean(ExcludedFileNames, ExcludeRules.DefaultFileNames),
         DuplicateMinSize = SanitizeMinSize(DuplicateMinSize),
+        FullScanIntervalDays = FullScanIntervalDays is >= 1 and <= 90 ? FullScanIntervalDays : FullScanIntervalDefault,
         OcrFolders = OcrFolders is null ? null : ImageTextFolders.Clean(OcrFolders),
     };
 

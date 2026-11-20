@@ -277,6 +277,14 @@ public sealed class IndexStore : IDisposable
                     cmd.ExecuteNonQuery();
                 }
 
+                // Stage 14: the saved stand and the quick-scan state go with the location.
+                using (var cmd = Command(
+                    _writeConnection, tx, "DELETE FROM scan_resume WHERE root_id = @r; DELETE FROM root_scan WHERE root_id = @r"))
+                {
+                    cmd.Parameters.AddWithValue("@r", (int)rootId);
+                    cmd.ExecuteNonQuery();
+                }
+
                 tx.Commit();
             }
 
@@ -331,6 +339,12 @@ public sealed class IndexStore : IDisposable
                 using (var cmd = Command(
                     _writeConnection, tx,
                     "UPDATE roots SET last_scan_status = 0, last_scan_completed_utc = NULL, last_scan_failed_dirs = 0"))
+                {
+                    cmd.ExecuteNonQuery();
+                }
+
+                // Stage 14: no saved stand and no full-scan mark survive; the switches of the user stay.
+                using (var cmd = Command(_writeConnection, tx, ClearQuickScanStateSql))
                 {
                     cmd.ExecuteNonQuery();
                 }
@@ -395,13 +409,19 @@ public sealed class IndexStore : IDisposable
         {
             var result = new List<KnownChild>();
             using var cmd = Command(
-                _readConnection, null, "SELECT id, name, is_dir, size, mtime, attrs FROM entries WHERE parent_id = @p");
+                _readConnection, null,
+                """
+                SELECT e.id, e.name, e.is_dir, e.size, e.mtime, e.attrs, v.mtime
+                FROM entries e LEFT JOIN dir_verified v ON v.entry_id = e.id
+                WHERE e.parent_id = @p
+                """);
             cmd.Parameters.AddWithValue("@p", parentId);
             using var r = cmd.ExecuteReader();
             while (r.Read())
             {
                 result.Add(new KnownChild(
-                    r.GetInt32(0), r.GetString(1), r.GetInt32(2) != 0, r.GetInt64(3), r.GetInt64(4), (FileAttributes)r.GetInt32(5)));
+                    r.GetInt32(0), r.GetString(1), r.GetInt32(2) != 0, r.GetInt64(3), r.GetInt64(4), (FileAttributes)r.GetInt32(5),
+                    r.IsDBNull(6) ? null : r.GetInt64(6)));
             }
 
             return result;
@@ -691,6 +711,7 @@ public sealed class IndexStore : IDisposable
                     }
                 }
 
+                WriteVerifications(tx, batch);
                 PersistMaxId(tx);
                 tx.Commit();
             }
@@ -1109,6 +1130,214 @@ public sealed class IndexStore : IDisposable
             {
                 _writeConnection.Dispose();
                 _readConnection.Dispose();
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- quick scan and saved stands (stage 14)
+
+    /// <summary>
+    /// Removes every verified folder date, every saved stand and every full-scan mark; the quick-scan switches stay.
+    /// Used when entry numbers change or the directory is emptied (PLAN.md 11.5).
+    /// </summary>
+    internal const string ClearQuickScanStateSql = """
+        DELETE FROM dir_verified;
+        DELETE FROM scan_resume;
+        UPDATE root_scan SET last_full_utc = NULL, full_rules = NULL, resume_started_utc = NULL, resume_saved_utc = NULL,
+          resume_quick = NULL, resume_rules = NULL;
+        """;
+
+    /// <summary>The quick-scan state of a location; a location without a row gets an empty state.</summary>
+    public RootScanInfo GetRootScanInfo(byte rootId)
+    {
+        lock (_readLock)
+        {
+            using var cmd = Command(
+                _readConnection, null,
+                """
+                SELECT quick_enabled, last_full_utc, full_rules, resume_started_utc, resume_saved_utc, resume_quick, resume_rules,
+                       (SELECT COUNT(*) FROM scan_resume s WHERE s.root_id = @r)
+                FROM root_scan WHERE root_id = @r
+                """);
+            cmd.Parameters.AddWithValue("@r", (int)rootId);
+            using var r = cmd.ExecuteReader();
+            if (!r.Read())
+            {
+                return new RootScanInfo(rootId, null, null, null, null);
+            }
+
+            ScanResumeInfo? resume = r.IsDBNull(3) || r.IsDBNull(4) || r.IsDBNull(5) || r.IsDBNull(6)
+                ? null
+                : new ScanResumeInfo(r.GetInt64(3), r.GetInt64(4), r.GetInt32(5) != 0, r.GetString(6), r.GetInt32(7));
+            return new RootScanInfo(
+                rootId,
+                r.IsDBNull(0) ? null : r.GetInt32(0) != 0,
+                r.IsDBNull(1) ? null : r.GetInt64(1),
+                r.IsDBNull(2) ? null : r.GetString(2),
+                resume);
+        }
+    }
+
+    /// <summary>Sets the quick-scan switch of a location (null = default of its kind).</summary>
+    public void SetQuickScanEnabled(byte rootId, bool? enabled)
+    {
+        lock (_writeLock)
+        {
+            using var cmd = Command(
+                _writeConnection, null,
+                """
+                INSERT INTO root_scan(root_id, quick_enabled) VALUES(@r, @q)
+                ON CONFLICT(root_id) DO UPDATE SET quick_enabled = excluded.quick_enabled
+                """);
+            cmd.Parameters.AddWithValue("@r", (int)rootId);
+            cmd.Parameters.AddWithValue("@q", enabled.HasValue ? (enabled.Value ? 1 : 0) : DBNull.Value);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>Marks a complete full scan of a location with the fingerprint of the exclusion rules it used.</summary>
+    public void MarkFullScan(byte rootId, long completedUtc, string rules)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        lock (_writeLock)
+        {
+            using var cmd = Command(
+                _writeConnection, null,
+                """
+                INSERT INTO root_scan(root_id, last_full_utc, full_rules) VALUES(@r, @t, @rules)
+                ON CONFLICT(root_id) DO UPDATE SET last_full_utc = excluded.last_full_utc, full_rules = excluded.full_rules
+                """);
+            cmd.Parameters.AddWithValue("@r", (int)rootId);
+            cmd.Parameters.AddWithValue("@t", completedUtc);
+            cmd.Parameters.AddWithValue("@rules", rules);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>
+    /// Replaces the saved stand of a location by the given open folders (stack order, top first) in one transaction.
+    /// </summary>
+    public void SaveResume(byte rootId, long startedUtc, long savedUtc, bool quick, string rules, IReadOnlyList<ResumeFolder> folders)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        ArgumentNullException.ThrowIfNull(folders);
+        lock (_writeLock)
+        {
+            using var tx = _writeConnection.BeginTransaction();
+            using (var cmd = Command(_writeConnection, tx, "DELETE FROM scan_resume WHERE root_id = @r"))
+            {
+                cmd.Parameters.AddWithValue("@r", (int)rootId);
+                cmd.ExecuteNonQuery();
+            }
+
+            using (var cmd = Command(
+                _writeConnection, tx, "INSERT INTO scan_resume(root_id, seq, entry_id, path) VALUES(@r, @s, @e, @p)"))
+            {
+                cmd.Parameters.AddWithValue("@r", (int)rootId);
+                var pSeq = cmd.Parameters.Add("@s", SqliteType.Integer);
+                var pEntry = cmd.Parameters.Add("@e", SqliteType.Integer);
+                var pPath = cmd.Parameters.Add("@p", SqliteType.Text);
+                for (int i = 0; i < folders.Count; i++)
+                {
+                    pSeq.Value = i;
+                    pEntry.Value = folders[i].EntryId;
+                    pPath.Value = folders[i].Path;
+                    cmd.ExecuteNonQuery();
+                }
+            }
+
+            using (var cmd = Command(
+                _writeConnection, tx,
+                """
+                INSERT INTO root_scan(root_id, resume_started_utc, resume_saved_utc, resume_quick, resume_rules)
+                VALUES(@r, @started, @saved, @quick, @rules)
+                ON CONFLICT(root_id) DO UPDATE SET resume_started_utc = excluded.resume_started_utc,
+                  resume_saved_utc = excluded.resume_saved_utc, resume_quick = excluded.resume_quick,
+                  resume_rules = excluded.resume_rules
+                """))
+            {
+                cmd.Parameters.AddWithValue("@r", (int)rootId);
+                cmd.Parameters.AddWithValue("@started", startedUtc);
+                cmd.Parameters.AddWithValue("@saved", savedUtc);
+                cmd.Parameters.AddWithValue("@quick", quick ? 1 : 0);
+                cmd.Parameters.AddWithValue("@rules", rules);
+                cmd.ExecuteNonQuery();
+            }
+
+            tx.Commit();
+        }
+    }
+
+    /// <summary>
+    /// The open folders of the saved stand in stack order (top first). Folders that are no longer folders of this location
+    /// in the index are left out.
+    /// </summary>
+    public IReadOnlyList<ResumeFolder> LoadResumeFolders(byte rootId)
+    {
+        lock (_readLock)
+        {
+            var result = new List<ResumeFolder>();
+            using var cmd = Command(
+                _readConnection, null,
+                """
+                SELECT s.entry_id, s.path FROM scan_resume s
+                JOIN entries e ON e.id = s.entry_id AND e.is_dir = 1 AND e.root_id = s.root_id
+                WHERE s.root_id = @r ORDER BY s.seq
+                """);
+            cmd.Parameters.AddWithValue("@r", (int)rootId);
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                result.Add(new ResumeFolder(r.GetInt32(0), r.GetString(1)));
+            }
+
+            return result;
+        }
+    }
+
+    /// <summary>Removes the saved stand of a location.</summary>
+    public void ClearResume(byte rootId)
+    {
+        lock (_writeLock)
+        {
+            using var cmd = Command(
+                _writeConnection, null,
+                """
+                DELETE FROM scan_resume WHERE root_id = @r;
+                UPDATE root_scan SET resume_started_utc = NULL, resume_saved_utc = NULL, resume_quick = NULL, resume_rules = NULL
+                WHERE root_id = @r;
+                """);
+            cmd.Parameters.AddWithValue("@r", (int)rootId);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    private void WriteVerifications(SqliteTransaction tx, ChangeBatch batch)
+    {
+        if (batch.Unverified.Count > 0)
+        {
+            using var cmd = Command(_writeConnection, tx, "DELETE FROM dir_verified WHERE entry_id = @id");
+            var pId = cmd.Parameters.Add("@id", SqliteType.Integer);
+            foreach (int id in batch.Unverified)
+            {
+                pId.Value = id;
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        if (batch.Verified.Count > 0)
+        {
+            // Only for folders that still exist: a row without its entry would never be removed by the trigger.
+            using var cmd = Command(
+                _writeConnection, tx,
+                "INSERT OR REPLACE INTO dir_verified(entry_id, mtime) SELECT @id, @m WHERE EXISTS(SELECT 1 FROM entries WHERE id = @id AND is_dir = 1)");
+            var pId = cmd.Parameters.Add("@id", SqliteType.Integer);
+            var pM = cmd.Parameters.Add("@m", SqliteType.Integer);
+            foreach (var v in batch.Verified)
+            {
+                pId.Value = v.Id;
+                pM.Value = v.MTimeTicks;
+                cmd.ExecuteNonQuery();
             }
         }
     }

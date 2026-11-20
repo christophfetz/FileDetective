@@ -17,6 +17,12 @@ public enum ScanTrigger
 
     /// <summary>The watcher lost events (buffer overflow): the whole location is scanned again.</summary>
     Overflow,
+
+    /// <summary>
+    /// Stage 14 (PLAN.md 11.5): an automatic scan of a share that made way for a local or manual scan continues from its
+    /// saved stand. Never counts as an automatic attempt.
+    /// </summary>
+    Continue,
 }
 
 /// <summary>A request to scan one whole location.</summary>
@@ -44,6 +50,11 @@ public enum QueuedScanState
 /// does not count as an automatic attempt). A request for the running location is dropped, the running scan serves it;
 /// only <see cref="ScanTrigger.Overflow"/> queues it once more, because events were lost while the scan may already have
 /// passed the folders concerned.
+/// <para>
+/// Stage 14 (PLAN.md 11.5): a local request or a manual request for another location makes a running automatic scan of a
+/// share or removable drive give way. That scan is cancelled (it saves its stand) and queued again as
+/// <see cref="ScanTrigger.Continue"/> behind the requests of its group, so it continues where it stopped.
+/// </para>
 /// </remarks>
 public sealed class ScanQueue : IDisposable
 {
@@ -56,6 +67,7 @@ public sealed class ScanQueue : IDisposable
     private ScanRequest? _running;
     private CancellationTokenSource? _runningCancel;
     private ScanRequest? _rerun;
+    private bool _preempted;
     private bool _stopping;
 
     /// <param name="run">Runs one scan on the worker thread. Exceptions are reported through <see cref="Failed"/>.</param>
@@ -157,6 +169,7 @@ public sealed class ScanQueue : IDisposable
 
             if (_running?.RootId == rootId)
             {
+                _preempted = false;
                 _runningCancel?.Cancel();
             }
 
@@ -205,6 +218,7 @@ public sealed class ScanQueue : IDisposable
 
             if (_running is { } running && rootIds.Contains(running.RootId))
             {
+                _preempted = false;
                 _runningCancel?.Cancel();
             }
 
@@ -243,6 +257,7 @@ public sealed class ScanQueue : IDisposable
 
             if (_running?.RootId == rootId)
             {
+                _preempted = false;
                 _runningCancel?.Cancel();
             }
         }
@@ -325,7 +340,28 @@ public sealed class ScanQueue : IDisposable
         // Insert after the last request of the same or a better priority: local first, then first come first served.
         int position = _queue.FindLastIndex(r => r.Priority <= request.Priority) + 1;
         _queue.Insert(position, request);
+
+        if (_running is { } running && _runningCancel is { } cancel && !_preempted && Preempts(request, running))
+        {
+            _preempted = true;
+            cancel.Cancel();
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// Stage 14: true if <paramref name="request"/> makes the running scan give way: the running one is an automatic scan
+    /// of a share or removable drive (it can continue from its saved stand), the new one is local or manual.
+    /// </summary>
+    public static bool Preempts(ScanRequest request, ScanRequest running)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(running);
+        return running.Kind != RootKind.Local
+            && running.Trigger is ScanTrigger.Scheduled or ScanTrigger.Continue
+            && request.RootId != running.RootId
+            && (request.Kind == RootKind.Local || request.Trigger == ScanTrigger.Manual);
     }
 
     private void WorkerLoop()
@@ -380,6 +416,13 @@ public sealed class ScanQueue : IDisposable
                 {
                     _running = null;
                     _runningCancel = null;
+                    if (_preempted)
+                    {
+                        // Made way (stage 14): queued again unless the program stops or the location was blocked meanwhile.
+                        _preempted = false;
+                        EnqueueLocked(request with { Trigger = ScanTrigger.Continue });
+                    }
+
                     if (_rerun is { } again)
                     {
                         _rerun = null;

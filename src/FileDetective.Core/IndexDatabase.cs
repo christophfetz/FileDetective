@@ -95,6 +95,41 @@ public sealed class IndexDatabase : IDisposable
         );
         """;
 
+    /// <summary>Name of the trigger that removes the verified folder dates of deleted entries.</summary>
+    internal const string VerifiedTrigger = "tr_entries_delete_dir_verified";
+
+    // Stage 14 (PLAN.md 11.5). dir_verified: the last write time (UTC ticks) a folder without subfolders had when its own
+    // listing was last compared completely; a quick scan does not list such a folder while its date is unchanged.
+    // scan_resume: the open folders of an interrupted scan of a whole location, in stack order (seq 0 = top).
+    // root_scan: per location the last full scan, the rules it used, the quick-scan switch and the state of a saved stand.
+    private const string QuickScanExtensionSql = """
+        CREATE TABLE IF NOT EXISTS dir_verified(
+          entry_id INTEGER PRIMARY KEY,
+          mtime INTEGER NOT NULL
+        );
+        CREATE TRIGGER IF NOT EXISTS tr_entries_delete_dir_verified AFTER DELETE ON entries
+        BEGIN
+          DELETE FROM dir_verified WHERE entry_id = old.id;
+        END;
+        CREATE TABLE IF NOT EXISTS scan_resume(
+          root_id INTEGER NOT NULL,
+          seq INTEGER NOT NULL,
+          entry_id INTEGER NOT NULL,
+          path TEXT NOT NULL,
+          PRIMARY KEY(root_id, seq)
+        );
+        CREATE TABLE IF NOT EXISTS root_scan(
+          root_id INTEGER PRIMARY KEY,
+          quick_enabled INTEGER,
+          last_full_utc INTEGER,
+          full_rules TEXT,
+          resume_started_utc INTEGER,
+          resume_saved_utc INTEGER,
+          resume_quick INTEGER,
+          resume_rules TEXT
+        );
+        """;
+
     private const int SqliteBusy = 5;
     private const int SqliteLocked = 6;
 
@@ -186,6 +221,8 @@ public sealed class IndexDatabase : IDisposable
     /// <remarks>
     /// Stage 11 adds the table <c>ocr</c> with the trigger <c>tr_entries_delete_ocr</c> in the same way and under the same
     /// rule: a table without its trigger loses its rows (an older version without the trigger has renumbered).
+    /// Stage 14 adds <c>dir_verified</c>, <c>scan_resume</c> and <c>root_scan</c> under the same rule; they are never
+    /// mapped to new numbers, only dropped.
     /// </remarks>
     public static void EnsureExtensions(SqliteConnection connection, SqliteTransaction transaction, bool hashesAreMapped = false)
     {
@@ -194,10 +231,19 @@ public sealed class IndexDatabase : IDisposable
         bool hadTrigger = Exists(connection, transaction, "trigger", HashTrigger);
         bool hadOcrTable = Exists(connection, transaction, "table", "ocr");
         bool hadOcrTrigger = Exists(connection, transaction, "trigger", OcrTrigger);
+        bool hadVerifiedTable = Exists(connection, transaction, "table", "dir_verified");
+        bool hadVerifiedTrigger = Exists(connection, transaction, "trigger", VerifiedTrigger);
         using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = ExtensionSql + OcrExtensionSql + NotesExtensionSql;
+        command.CommandText = ExtensionSql + OcrExtensionSql + NotesExtensionSql + QuickScanExtensionSql;
         command.ExecuteNonQuery();
+        if (hadVerifiedTable && !hadVerifiedTrigger)
+        {
+            // Stage 14: without its trigger the entry numbers may belong to other folders now (renumbered by a program
+            // that did not know the table). Verified dates and saved stands are only a shortcut: dropped, never mapped.
+            command.CommandText = "DELETE FROM dir_verified; DELETE FROM scan_resume; UPDATE root_scan SET resume_started_utc = NULL, resume_saved_utc = NULL, resume_quick = NULL, resume_rules = NULL";
+            command.ExecuteNonQuery();
+        }
         if (hadTable && !hadTrigger && !hashesAreMapped)
         {
             command.CommandText = "DELETE FROM hashes";

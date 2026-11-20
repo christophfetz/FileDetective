@@ -30,6 +30,10 @@ public enum ScanOutcome
 /// Statistics of one scan (PLAN.md 7.4): listed directories, entries, duration, sum of pauses, errors; plus the changes
 /// written to the index. <see cref="Entries"/> counts the entries listed and kept (after exclusions),
 /// <see cref="Excluded"/> the skipped ones; <see cref="Updated"/> includes case-only renames.
+/// Stage 14 (PLAN.md 11.5): <see cref="Quick"/> for a quick scan, <see cref="ResumedFolders"/> the open folders taken
+/// over from a saved stand (0 = started from the location), <see cref="SkippedUnchanged"/> the unchanged folders that
+/// were not listed (in the check mode: that would not have been listed), <see cref="ShadowMisses"/> the folders of the
+/// check mode that would have been skipped although their names changed.
 /// </summary>
 public sealed record ScanStatistics(
     ScanOutcome Outcome,
@@ -42,18 +46,39 @@ public sealed record ScanStatistics(
     TimeSpan TotalPause,
     int Inserted,
     int Updated,
-    int Deleted)
+    int Deleted,
+    bool Quick = false,
+    bool Shadow = false,
+    int ResumedFolders = 0,
+    long SkippedUnchanged = 0,
+    int ShadowMisses = 0)
 {
     /// <summary>
     /// One log line with everything PLAN.md 7.4 asks for (listed directories, entries, duration, sum of the pauses, errors),
     /// plus the changes written. Culture-independent, so log lines look the same on every machine.
     /// </summary>
     public string Describe(string location, ScanTrigger trigger)
-        => string.Create(
-            System.Globalization.CultureInfo.InvariantCulture,
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        string line = string.Create(
+            inv,
             $"Scan of {location} ({trigger}): {Outcome}, {DirectoriesListed} directories listed, {Entries} entries, "
             + $"{FailedDirectories} failed directories, {Excluded} excluded, +{Inserted} ~{Updated} -{Deleted}, "
             + $"duration {Duration.TotalSeconds:F1} s, pauses {TotalPause.TotalSeconds:F1} s.");
+        if (ResumedFolders > 0)
+        {
+            line += string.Create(inv, $" Resumed with {ResumedFolders} open folders.");
+        }
+
+        if (Quick)
+        {
+            line += Shadow
+                ? string.Create(inv, $" Quick scan check mode: {SkippedUnchanged} folders would be skipped, {ShadowMisses} of them changed.")
+                : string.Create(inv, $" Quick scan: {SkippedUnchanged} unchanged folders skipped.");
+        }
+
+        return line;
+    }
 }
 
 /// <summary>Optional settings of a <see cref="Scanner"/>.</summary>
@@ -75,6 +100,27 @@ public sealed class ScannerOptions
     /// (stage 6: progress in the tray status line and the footer). Must be cheap and must not throw.
     /// </summary>
     public Action<long>? Progress { get; init; }
+
+    /// <summary>
+    /// Stage 14 (PLAN.md 11.5): a quick scan. A known folder without subfolders whose date in the listing of its parent
+    /// equals its verified date is not listed. Only <see cref="Scanner.ScanRoot"/> uses it.
+    /// </summary>
+    public bool QuickScan { get; init; }
+
+    /// <summary>
+    /// Stage 14 check mode: a quick scan decides as usual but lists every folder anyway and counts the folders it would
+    /// have skipped although their names changed.
+    /// </summary>
+    public bool QuickScanShadow { get; init; }
+
+    /// <summary>Called on the scanning thread with the path of every folder the check mode would have skipped wrongly.</summary>
+    public Action<string>? ShadowMiss { get; init; }
+
+    /// <summary>Stage 14: how often a scan of a whole location saves its stand (at most).</summary>
+    public TimeSpan CheckpointInterval { get; init; } = Scanner.DefaultCheckpointInterval;
+
+    /// <summary>Stage 14: a saved stand older than this is dropped and the scan starts from the location again.</summary>
+    public TimeSpan ResumeMaxAge { get; init; } = Scanner.DefaultResumeMaxAge;
 }
 
 /// <summary>
@@ -93,10 +139,30 @@ public sealed class ScannerOptions
 /// </list>
 /// Entries are inserted parent first, so every written batch is consistent on its own; cancelling between directories
 /// writes the pending batch and leaves a valid index.
+/// <para>
+/// Stage 14 (PLAN.md 11.5): a scan of a whole location saves its open folders at most once per
+/// <see cref="ScannerOptions.CheckpointInterval"/> (after writing the pending batch) and when it is cancelled; the next
+/// <see cref="ScanRoot"/> continues there. Resumed folders are always compared (never treated as new), so continuing
+/// from an older stand only compares some folders twice. A folder without subfolders gets its date (from the listing of
+/// its parent) in <c>dir_verified</c> once its own listing was compared; a quick scan does not list it while that date
+/// stays the same.
+/// </para>
 /// </remarks>
 public sealed class Scanner
 {
     public const int DefaultBatchSize = 5_000;
+
+    /// <summary>Stage 14: a stand is saved at most once a minute.</summary>
+    public static readonly TimeSpan DefaultCheckpointInterval = TimeSpan.FromMinutes(1);
+
+    /// <summary>Stage 14: a saved stand is used for 7 days.</summary>
+    public static readonly TimeSpan DefaultResumeMaxAge = TimeSpan.FromDays(7);
+
+    /// <summary>
+    /// Stage 14: a folder date is only recorded as verified when it is at least this old at the time of the listing.
+    /// Covers coarse time stamps (FAT, some NAS) and a server clock that runs a little ahead.
+    /// </summary>
+    public static readonly TimeSpan VerifyMargin = TimeSpan.FromHours(1);
 
     /// <summary>Upper limit of a pause at the normal level.</summary>
     public static readonly TimeSpan NormalMaxPause = TimeSpan.FromMilliseconds(250);
@@ -114,6 +180,7 @@ public sealed class Scanner
     private readonly int _batchSize;
     private readonly NetworkPoliteness _politeness;
     private readonly Action<long>? _progress;
+    private readonly ScannerOptions _options;
     private int _running;
 
     public Scanner(IndexStore store, IDirectoryLister lister, ExcludeRules excludeRules, ScannerOptions? options = null)
@@ -131,6 +198,7 @@ public sealed class Scanner
         _batchSize = options.BatchSize;
         _politeness = options.Politeness;
         _progress = options.Progress;
+        _options = options;
     }
 
     /// <summary>True while a scan of this instance runs.</summary>
@@ -158,9 +226,22 @@ public sealed class Scanner
     }
 
     /// <summary>
+    /// True if a saved stand may be continued (stage 14): made under the same exclusion rules and not older than
+    /// <paramref name="maxAge"/>.
+    /// </summary>
+    public static bool CanResume(ScanResumeInfo? resume, string rulesFingerprint, DateTimeOffset now, TimeSpan maxAge)
+    {
+        ArgumentNullException.ThrowIfNull(rulesFingerprint);
+        return resume is not null
+            && string.Equals(resume.Rules, rulesFingerprint, StringComparison.Ordinal)
+            && now.ToUnixTimeSeconds() - resume.SavedUtc <= (long)maxAge.TotalSeconds;
+    }
+
+    /// <summary>
     /// Scans a whole location and keeps its scan state in <c>roots</c> up to date: Running at the start, then
     /// Complete, CompleteWithErrors or Aborted together with the number of failed directories. An unreachable location
-    /// changes nothing.
+    /// changes nothing. Stage 14: continues a saved stand of the location if <see cref="CanResume"/> allows it, saves
+    /// its own stand while it runs and when it is cancelled, and marks a complete full scan in <c>root_scan</c>.
     /// </summary>
     /// <exception cref="ArgumentException">The location does not exist.</exception>
     /// <exception cref="InvalidOperationException">This scanner is already running.</exception>
@@ -170,8 +251,26 @@ public sealed class Scanner
         try
         {
             var root = _store.GetRoot(rootId) ?? throw new ArgumentException($"Location {rootId} does not exist.", nameof(rootId));
-            var run = new Run(this, root, cancellationToken);
-            return run.Execute(root.RootEntryId, NormalizeDirectoryPath(root.Path), updateRootState: true);
+            var info = _store.GetRootScanInfo(rootId);
+            IReadOnlyList<ResumeFolder>? resume = null;
+            long? resumeStarted = null;
+            bool resumedQuick = false;
+            if (CanResume(info.Resume, _excludes.Fingerprint, _clock.UtcNow, _options.ResumeMaxAge))
+            {
+                resume = _store.LoadResumeFolders(rootId);
+                resumeStarted = info.Resume!.StartedUtc;
+                resumedQuick = info.Resume.Quick;
+            }
+            else if (info.Resume is not null)
+            {
+                _store.ClearResume(rootId);
+            }
+
+            var run = new Run(this, root, cancellationToken, _options.QuickScan, checkpoints: true)
+            {
+                ResumedQuick = resumedQuick,
+            };
+            return run.Execute(root.RootEntryId, NormalizeDirectoryPath(root.Path), updateRootState: true, resume, resumeStarted);
         }
         finally
         {
@@ -181,7 +280,7 @@ public sealed class Scanner
 
     /// <summary>
     /// Scans the subtree below a known folder (e.g. a folder the watcher reports, stage 6). Does not touch the scan
-    /// state of the location. If the start folder cannot be listed, nothing changes.
+    /// state of the location. If the start folder cannot be listed, nothing changes. Never quick and never saved.
     /// </summary>
     /// <exception cref="ArgumentException">The path is not a known folder of the index.</exception>
     /// <exception cref="InvalidOperationException">This scanner is already running.</exception>
@@ -201,7 +300,7 @@ public sealed class Scanner
 
             var root = _store.GetRoot(entry.RootId)
                 ?? throw new ArgumentException($"The location of '{directoryPath}' does not exist.", nameof(directoryPath));
-            var run = new Run(this, root, cancellationToken);
+            var run = new Run(this, root, cancellationToken, quick: false, checkpoints: false);
 
             // A link (junction, symbolic link) is never entered, also not as the start of a subtree scan.
             if (entry.ParentId != 0 && (entry.Attributes & FileAttributes.ReparsePoint) != 0 && _linkDetector.IsLink(path))
@@ -209,7 +308,7 @@ public sealed class Scanner
                 return run.Finish(ScanOutcome.Complete);
             }
 
-            return run.Execute(entry.Id, path, updateRootState: false);
+            return run.Execute(entry.Id, path, updateRootState: false, resume: null, resumeStarted: null);
         }
         finally
         {
@@ -244,14 +343,24 @@ public sealed class Scanner
         => ex is IOException or UnauthorizedAccessException or System.Security.SecurityException
             or ArgumentException or NotSupportedException;
 
-    private readonly record struct WorkItem(int EntryId, string Path, bool IsNew);
+    /// <summary>
+    /// A folder waiting on the stack. <see cref="MTimeTicks"/> is its date from the listing of its parent in this scan
+    /// (0 = unknown, e.g. a resumed folder), <see cref="VerifiedTicks"/> its row in <c>dir_verified</c>,
+    /// <see cref="WouldSkip"/> marks a folder the check mode lists although a quick scan would skip it.
+    /// </summary>
+    private readonly record struct WorkItem(
+        int EntryId, string Path, bool IsNew, long MTimeTicks = 0, long? VerifiedTicks = null, bool WouldSkip = false);
 
     /// <summary>State of one scan.</summary>
-    private sealed class Run(Scanner owner, RootInfo root, CancellationToken cancellationToken)
+    private sealed class Run(Scanner owner, RootInfo root, CancellationToken cancellationToken, bool quick, bool checkpoints)
     {
         private readonly Stack<WorkItem> _stack = new();
         private readonly TimeSpan _start = owner._clock.Elapsed;
+        private readonly bool _shadow = quick && owner._options.QuickScanShadow;
         private ChangeBatch _batch = new();
+        private WorkItem? _current;
+        private TimeSpan _lastCheckpoint;
+        private long _startedUtc;
         private int _listed;
         private int _failed;
         private long _entries;
@@ -261,8 +370,15 @@ public sealed class Scanner
         private int _inserted;
         private int _updated;
         private int _deleted;
+        private int _resumed;
+        private long _skipped;
+        private int _shadowMisses;
 
-        public ScanStatistics Execute(int startEntryId, string startPath, bool updateRootState)
+        /// <summary>The mode of the saved stand that this run continues (a quick part makes the whole run not a full scan).</summary>
+        public bool ResumedQuick { get; init; }
+
+        public ScanStatistics Execute(
+            int startEntryId, string startPath, bool updateRootState, IReadOnlyList<ResumeFolder>? resume, long? resumeStarted)
         {
             if (cancellationToken.IsCancellationRequested)
             {
@@ -270,8 +386,10 @@ public sealed class Scanner
             }
 
             DateTimeOffset startedUtc = owner._clock.UtcNow;
+            _startedUtc = resumeStarted ?? startedUtc.ToUnixTimeSeconds();
 
-            // The start folder is listed before anything is written: if the location is not reachable, nothing changes.
+            // The start folder is listed before anything is written: if the location is not reachable, nothing changes
+            // (also a saved stand stays as it is). When continuing a saved stand, this listing only proves reachability.
             IReadOnlyList<RawEntry> startListing;
             try
             {
@@ -298,13 +416,34 @@ public sealed class Scanner
 
             ScanOutcome outcome;
             bool done = false;
+            _lastCheckpoint = owner._clock.Elapsed;
             try
             {
-                Process(new WorkItem(startEntryId, startPath, IsNew: false), startListing);
+                if (resume is not null)
+                {
+                    // Top first in the stand: pushed bottom first, so the order of the interrupted scan is kept.
+                    for (int i = resume.Count - 1; i >= 0; i--)
+                    {
+                        _stack.Push(new WorkItem(resume[i].EntryId, resume[i].Path, IsNew: false));
+                    }
+
+                    _resumed = resume.Count;
+                }
+                else
+                {
+                    Process(new WorkItem(startEntryId, startPath, IsNew: false), startListing);
+                }
+
                 while (_stack.Count > 0)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    if (checkpoints && owner._clock.Elapsed - _lastCheckpoint >= owner._options.CheckpointInterval)
+                    {
+                        SaveCheckpoint();
+                    }
+
                     var item = _stack.Pop();
+                    _current = item;
                     IReadOnlyList<RawEntry> listing;
                     try
                     {
@@ -314,10 +453,12 @@ public sealed class Scanner
                     {
                         // PLAN.md 7.2 point 1: count it, leave the known subtree exactly as it is, go on.
                         _failed++;
+                        _current = null;
                         continue;
                     }
 
                     Process(item, listing);
+                    _current = null;
                 }
 
                 Flush();
@@ -327,8 +468,20 @@ public sealed class Scanner
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // Cancellation is only observed between directories (and during a pause, before the listing is used),
-                // so the pending batch holds complete directories and is written.
+                // so the pending batch holds complete directories and is written. A folder cancelled during its pause
+                // goes back on the stack, so the saved stand still holds it.
+                if (_current is { } unfinished)
+                {
+                    _stack.Push(unfinished);
+                    _current = null;
+                }
+
                 Flush();
+                if (checkpoints && _stack.Count > 0)
+                {
+                    SaveCheckpoint();
+                }
+
                 outcome = ScanOutcome.Cancelled;
                 done = true;
             }
@@ -337,6 +490,7 @@ public sealed class Scanner
                 if (!done && updateRootState)
                 {
                     // Unexpected error (bug, database failure): the batches written so far stay valid, the state says aborted.
+                    // The last saved stand stays; continuing it compares some folders twice.
                     TryWriteState(ScanStatus.Aborted, completedUtc: null);
                 }
             }
@@ -349,9 +503,19 @@ public sealed class Scanner
                 }
                 else
                 {
+                    long completed = owner._clock.UtcNow.ToUnixTimeSeconds();
+                    if (checkpoints)
+                    {
+                        owner._store.ClearResume(root.Id);
+                        if (!quick && !ResumedQuick)
+                        {
+                            owner._store.MarkFullScan(root.Id, completed, owner._excludes.Fingerprint);
+                        }
+                    }
+
                     TryWriteState(
                         outcome == ScanOutcome.Complete ? ScanStatus.Complete : ScanStatus.CompleteWithErrors,
-                        owner._clock.UtcNow.ToUnixTimeSeconds());
+                        completed);
                 }
             }
 
@@ -359,7 +523,9 @@ public sealed class Scanner
         }
 
         public ScanStatistics Finish(ScanOutcome outcome)
-            => new(outcome, _listed, _failed, _entries, _excluded, _links, owner._clock.Elapsed - _start, _pauses, _inserted, _updated, _deleted);
+            => new(
+                outcome, _listed, _failed, _entries, _excluded, _links, owner._clock.Elapsed - _start, _pauses, _inserted,
+                _updated, _deleted, quick, _shadow, _resumed, _skipped, _shadowMisses);
 
         private RootInfo CurrentRoot() => owner._store.GetRoot(root.Id) ?? root;
 
@@ -379,6 +545,25 @@ public sealed class Scanner
             {
                 // Writing the aborted state after an unexpected error must not hide that error.
             }
+        }
+
+        /// <summary>
+        /// Writes the pending batch, then the open folders. Every open folder is written by then (inserted parent first),
+        /// and everything taken from the stack since the last stand is still in the older stand: no change is lost.
+        /// </summary>
+        private void SaveCheckpoint()
+        {
+            Flush();
+            var folders = new List<ResumeFolder>(_stack.Count);
+            foreach (var item in _stack)
+            {
+                folders.Add(new ResumeFolder(item.EntryId, item.Path));
+            }
+
+            owner._store.SaveResume(
+                root.Id, _startedUtc, owner._clock.UtcNow.ToUnixTimeSeconds(), quick || ResumedQuick,
+                owner._excludes.Fingerprint, folders);
+            _lastCheckpoint = owner._clock.Elapsed;
         }
 
         private IReadOnlyList<RawEntry> ListWithPause(string path)
@@ -409,6 +594,7 @@ public sealed class Scanner
         {
             // Step 2: exclusions.
             var children = new List<RawEntry>(listing.Count);
+            bool hasSubfolders = false;
             foreach (var e in listing)
             {
                 if (owner._excludes.IsExcluded(dir.Path, e))
@@ -418,10 +604,12 @@ public sealed class Scanner
                 else
                 {
                     children.Add(e);
+                    hasSubfolders |= e.IsDirectory;
                 }
             }
 
             _entries += children.Count;
+            int nameChanges = 0;
 
             // Step 3: compare with the known children. Skipped for folders inserted by this scan (in particular the
             // whole first scan of a location), because nothing can be known below them.
@@ -452,6 +640,7 @@ public sealed class Scanner
                 {
                     // A file became a folder or the other way round: replace it.
                     AddDelete(k.Id);
+                    nameChanges++;
                     match = null;
                 }
 
@@ -462,6 +651,7 @@ public sealed class Scanner
                         // Only the case of the name changed (Name matched OrdinalIgnoreCase). Rare; one row, written directly.
                         owner._store.Rename(m.Id, e.Name);
                         _updated++;
+                        nameChanges++;
                     }
 
                     if (m.Size != size || m.MTimeUnixSeconds != mtime || m.Attributes != e.Attributes)
@@ -472,17 +662,18 @@ public sealed class Scanner
 
                     if (e.IsDirectory)
                     {
-                        Descend(m.Id, path, e, isNew: false);
+                        Descend(m.Id, path, e, isNew: false, m.VerifiedTicks);
                     }
                 }
                 else
                 {
                     int id = owner._store.AllocateId();
                     _batch.Inserts.Add(new EntryInsert(id, dir.EntryId, e.Name, e.IsDirectory, size, mtime, e.Attributes));
+                    nameChanges++;
                     FlushIfFull();
                     if (e.IsDirectory)
                     {
-                        Descend(id, path, e, isNew: true);
+                        Descend(id, path, e, isNew: true, verifiedTicks: null);
                     }
                 }
             }
@@ -495,11 +686,49 @@ public sealed class Scanner
                     foreach (var k in bucket)
                     {
                         AddDelete(k.Id);
+                        nameChanges++;
                     }
                 }
             }
 
+            Verify(dir, hasSubfolders);
+            if (dir.WouldSkip && nameChanges > 0)
+            {
+                _shadowMisses++;
+                owner._options.ShadowMiss?.Invoke(dir.Path);
+            }
+
             owner._progress?.Invoke(_entries);
+        }
+
+        /// <summary>
+        /// Stage 14: after the listing of a folder was compared completely, a folder without subfolders keeps the date
+        /// its parent's listing showed in this scan, if that date is old enough; a folder with subfolders loses its row.
+        /// </summary>
+        private void Verify(WorkItem dir, bool hasSubfolders)
+        {
+            if (hasSubfolders)
+            {
+                if (dir.VerifiedTicks is not null)
+                {
+                    _batch.Unverified.Add(dir.EntryId);
+                    FlushIfFull();
+                }
+
+                return;
+            }
+
+            if (dir.MTimeTicks <= 0 || dir.VerifiedTicks == dir.MTimeTicks)
+            {
+                return;
+            }
+
+            long latest = owner._clock.UtcNow.UtcTicks - VerifyMargin.Ticks;
+            if (dir.MTimeTicks <= latest)
+            {
+                _batch.Verified.Add(new FolderVerification(dir.EntryId, dir.MTimeTicks));
+                FlushIfFull();
+            }
         }
 
         private static KnownChild? TakeMatch(Dictionary<string, List<KnownChild>> known, string name)
@@ -526,7 +755,7 @@ public sealed class Scanner
             return result;
         }
 
-        private void Descend(int id, string path, in RawEntry entry, bool isNew)
+        private void Descend(int id, string path, in RawEntry entry, bool isNew, long? verifiedTicks)
         {
             if ((entry.Attributes & FileAttributes.ReparsePoint) != 0 && owner._linkDetector.IsLink(path))
             {
@@ -544,7 +773,20 @@ public sealed class Scanner
                 return;
             }
 
-            _stack.Push(new WorkItem(id, path, isNew));
+            long ticks = DateTime.SpecifyKind(entry.LastWriteUtc, DateTimeKind.Utc).Ticks;
+            bool unchanged = quick && !isNew && ticks > 0 && verifiedTicks == ticks;
+            if (unchanged)
+            {
+                _skipped++;
+                if (!_shadow)
+                {
+                    // Stage 14: a known folder without subfolders whose date did not change since its listing was last
+                    // compared. Not listed, so no pause either; its entries stay as they are.
+                    return;
+                }
+            }
+
+            _stack.Push(new WorkItem(id, path, isNew, ticks, verifiedTicks, WouldSkip: unchanged));
         }
 
         private void AddDelete(int id)

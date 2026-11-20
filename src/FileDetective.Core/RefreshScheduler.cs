@@ -210,6 +210,26 @@ public sealed class RefreshScheduler : IDisposable
         return AttemptsToday(root, now, zone) < MaxAttemptsPerDay;
     }
 
+    /// <summary>
+    /// Stage 14 (PLAN.md 11.5): true if a scan of a whole location runs as a quick scan. Only automatic scans
+    /// (<see cref="ScanTrigger.Scheduled"/>, <see cref="ScanTrigger.Continue"/>, <see cref="ScanTrigger.Startup"/>,
+    /// <see cref="ScanTrigger.Overflow"/>) of a location with the quick scan switched on, and only while the last full
+    /// scan is younger than <paramref name="fullInterval"/> and was made under the same exclusion rules. "Update now"
+    /// and the first scan are always full.
+    /// </summary>
+    public static bool ShouldQuickScan(
+        RootInfo root, RootScanInfo info, ScanTrigger trigger, string rulesFingerprint, DateTimeOffset now, TimeSpan fullInterval)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(info);
+        ArgumentNullException.ThrowIfNull(rulesFingerprint);
+        return info.QuickFor(root.Kind)
+            && trigger is ScanTrigger.Scheduled or ScanTrigger.Continue or ScanTrigger.Startup or ScanTrigger.Overflow
+            && info.LastFullScanUtc is { } full
+            && string.Equals(info.FullScanRules, rulesFingerprint, StringComparison.Ordinal)
+            && now.ToUnixTimeSeconds() - full < (long)fullInterval.TotalSeconds;
+    }
+
     /// <summary>True if a request counts as an automatic attempt in <c>attempts_today</c>.</summary>
     public static bool CountsAsAttempt(ScanRequest request)
     {

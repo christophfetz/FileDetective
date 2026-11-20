@@ -143,6 +143,7 @@
             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
               <Button x:Name="UpdateButton" />
               <Button x:Name="RemoveButton" />
+              <CheckBox x:Name="QuickScanBox" VerticalAlignment="Center" Margin="8,0,0,0" />
             </StackPanel>
             <TextBlock x:Name="LocationsMessage" Margin="0,8,0,0" FontSize="12" Visibility="Collapsed" />
           </StackPanel>
@@ -158,6 +159,10 @@
             <TextBox x:Name="FoldersBox" AcceptsReturn="True" Height="100" VerticalScrollBarVisibility="Auto"
                      VerticalContentAlignment="Top" />
             <TextBlock x:Name="FoldersHint" Style="{StaticResource MutedText}" Margin="0,4,0,0" />
+            <TextBlock x:Name="NetworkFoldersLabel" Style="{StaticResource LabelText}" />
+            <TextBox x:Name="NetworkFoldersBox" AcceptsReturn="True" Height="60" VerticalScrollBarVisibility="Auto"
+                     VerticalContentAlignment="Top" />
+            <TextBlock x:Name="NetworkFoldersHint" Style="{StaticResource MutedText}" Margin="0,4,0,0" />
             <TextBlock x:Name="PathsLabel" Style="{StaticResource LabelText}" />
             <TextBox x:Name="PathsBox" AcceptsReturn="True" Height="100" VerticalScrollBarVisibility="Auto"
                      VerticalContentAlignment="Top" />

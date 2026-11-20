@@ -60,6 +60,9 @@
   <data name="Status_Complete" xml:space="preserve"><value>Aktuell</value></data>
   <data name="Status_CompleteErrors" xml:space="preserve"><value>Fertig, {0} Ordner nicht lesbar</value></data>
   <data name="Status_Aborted" xml:space="preserve"><value>Unterbrochen</value></data>
+  <data name="Status_Resumable" xml:space="preserve"><value>Unterbrochen, setzt mit {0:N0} offenen Ordnern fort</value></data>
+  <data name="Location_QuickScan" xml:space="preserve"><value>Schnellabgleich</value></data>
+  <data name="Location_QuickScanHint" xml:space="preserve"><value>Automatische Aktualisierungen überspringen Ordner ohne Unterordner, deren Datum sich nicht geändert hat. Alle paar Tage und bei „Jetzt aktualisieren“ läuft ein voller Abgleich.</value></data>
   <data name="Status_Never" xml:space="preserve"><value>Noch nicht durchlaufen</value></data>
   <data name="Updated_Today" xml:space="preserve"><value>heute {0:t}</value></data>
   <data name="Button_Browse" xml:space="preserve"><value>Durchsuchen …</value></data>
@@ -107,6 +110,8 @@ Sie werden durch {0} ersetzt. Fortfahren?</value></data>
   <data name="Excl_Intro" xml:space="preserve"><value>Ausgeschlossene Ordner und Dateien kommen nicht ins Verzeichnis. Änderungen gelten ab der nächsten Aktualisierung. Ein Eintrag pro Zeile.</value></data>
   <data name="Excl_Folders" xml:space="preserve"><value>Ordnernamen (überall)</value></data>
   <data name="Excl_FoldersHint" xml:space="preserve"><value>Ein Ordner mit diesem Namen wird überall übersprungen.</value></data>
+  <data name="Excl_NetworkFolders" xml:space="preserve"><value>Ordnernamen (nur Netzlaufwerke)</value></data>
+  <data name="Excl_NetworkFoldersHint" xml:space="preserve"><value>Nur auf Netzlaufwerken übersprungen, z. B. Build-Ausgaben (bin, obj) auf einem gemeinsamen Projektlaufwerk.</value></data>
   <data name="Excl_Paths" xml:space="preserve"><value>Volle Pfade</value></data>
   <data name="Excl_PathsHint" xml:space="preserve"><value>Umgebungsvariablen wie %WINDIR% und * innerhalb eines Pfadteils sind erlaubt, z. B. C:\Users\*\AppData.</value></data>
   <data name="Excl_Files" xml:space="preserve"><value>Dateinamen</value></data>

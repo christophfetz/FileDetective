@@ -326,14 +326,33 @@ internal sealed class IndexService : IDisposable
     {
         // Exclusions and politeness are read here, so changes in the settings apply from the next scan on.
         var settings = _settings();
+        var store = _store ?? throw new InvalidOperationException("The directory is not loaded.");
+        var rules = settings.CreateExcludeRules(request.Kind);
+
+        // Stage 14 (PLAN.md 11.5): quick or full is decided per scan from the location's state.
+        bool quick = store.GetRoot(request.RootId) is { } root
+            && RefreshScheduler.ShouldQuickScan(
+                root, store.GetRootScanInfo(request.RootId), request.Trigger, rules.Fingerprint, DateTimeOffset.UtcNow,
+                settings.FullScanInterval);
+        int loggedMisses = 0;
         return new Scanner(
-            _store ?? throw new InvalidOperationException("The directory is not loaded."),
+            store,
             FileSystemDirectoryLister.Instance,
-            settings.CreateExcludeRules(),
+            rules,
             new ScannerOptions
             {
                 Politeness = settings.NetworkPolitenessLevel,
                 Progress = entries => Interlocked.Exchange(ref _runningEntries, entries),
+                QuickScan = quick,
+                QuickScanShadow = settings.QuickScanShadow,
+                ShadowMiss = path =>
+                {
+                    // At most 100 paths per scan in the log; the count is in the summary line.
+                    if (++loggedMisses <= 100)
+                    {
+                        FileLog.Shared.Info($"Quick scan check: folder would have been skipped but changed: {path}");
+                    }
+                },
             });
     }
 
